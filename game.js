@@ -50,6 +50,12 @@ const ui = {
   loaderBar: document.getElementById('loader-bar'),
   loaderText: document.getElementById('loader-text'),
   reveal: document.getElementById('reveal'),
+  plan: document.getElementById('plan'),
+  planOpen: document.getElementById('plan-open'),
+  planClose: document.getElementById('plan-close'),
+  weatherBody: document.getElementById('weather-body'),
+  lightbox: document.getElementById('lightbox'),
+  lightboxImg: document.getElementById('lightbox-img'),
 };
 
 /* -------------------------------------------------------------------------- */
@@ -308,6 +314,114 @@ function showReveal() {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* Itinerary                                                                  */
+/* -------------------------------------------------------------------------- */
+
+const WEATHER = {
+  latitude: 36.1627,
+  longitude: -86.7816,
+  timezone: 'America/Chicago',
+};
+
+let weatherRequested = false;
+
+function formatClock(iso) {
+  const [hourText, minuteText] = (iso.split('T')[1] ?? '').split(':');
+  const hour = Number(hourText);
+  const suffix = hour >= 12 ? 'pm' : 'am';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour12}:${minuteText} ${suffix}`;
+}
+
+function weatherTip(temp, rain) {
+  if (rain >= 40) return 'rain is likely — bring an umbrella.';
+  if (temp <= 50) return 'chilly out — bring a jacket.';
+  if (temp >= 78) return 'warm one — skip the extra layer.';
+  return 'mild evening — a light layer is plenty.';
+}
+
+function renderWeather(data) {
+  const hourly = data?.hourly;
+  if (!hourly?.time?.length) throw new Error('weather response missing hourly data');
+
+  // hourly.time[0] is midnight local, so index 17 is the 5:00 pm slot.
+  const slot = Math.min(17, hourly.time.length - 1);
+  const temp = Math.round(hourly.temperature_2m[slot]);
+  const feels = Math.round(hourly.apparent_temperature[slot]);
+  const rain = Math.round(hourly.precipitation_probability?.[slot] ?? 0);
+  const sunset = data.daily?.sunset?.[0];
+
+  ui.weatherBody.innerHTML = `
+    <div class="weather-main">
+      <span class="weather-temp">${temp}&deg;</span>
+      <div class="weather-side">
+        <span class="weather-at">at 5:00 pm</span>
+        <span class="weather-feels">feels like ${feels}&deg;</span>
+      </div>
+    </div>
+    <ul class="weather-stats">
+      <li><span>rain</span><strong>${rain}%</strong></li>
+      ${sunset ? `<li><span>sunset</span><strong>${formatClock(sunset)}</strong></li>` : ''}
+    </ul>
+    <p class="weather-tip">${weatherTip(temp, rain)}</p>
+  `;
+}
+
+async function loadWeather() {
+  if (weatherRequested) return;
+  weatherRequested = true;
+
+  const params = new URLSearchParams({
+    latitude: String(WEATHER.latitude),
+    longitude: String(WEATHER.longitude),
+    hourly: 'temperature_2m,apparent_temperature,precipitation_probability',
+    daily: 'sunset',
+    temperature_unit: 'fahrenheit',
+    timezone: WEATHER.timezone,
+    forecast_days: '1',
+  });
+
+  try {
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+    if (!response.ok) throw new Error(`weather request failed: ${response.status}`);
+    renderWeather(await response.json());
+  } catch (error) {
+    console.error(error);
+    const note = document.createElement('p');
+    note.className = 'weather-loading';
+    note.textContent = 'could not load the forecast — check your connection.';
+    ui.weatherBody.replaceChildren(note);
+  }
+}
+
+function openPlan() {
+  ui.plan.hidden = false;
+  ui.plan.scrollTop = 0;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => ui.plan.classList.add('is-visible'));
+  });
+  loadWeather();
+}
+
+function closePlan() {
+  ui.plan.classList.remove('is-visible');
+  setTimeout(() => {
+    ui.plan.hidden = true;
+  }, 420);
+}
+
+function openLightbox(src, label) {
+  ui.lightboxImg.src = src;
+  ui.lightboxImg.alt = label ? `${label} menu` : 'menu';
+  ui.lightbox.hidden = false;
+}
+
+function closeLightbox() {
+  ui.lightbox.hidden = true;
+  ui.lightboxImg.removeAttribute('src');
+}
+
 async function handleGuess(event) {
   event.preventDefault();
   if (gameOver || busy || !answerVector) return;
@@ -362,6 +476,21 @@ async function start() {
   ui.answerSlots.textContent = '?'.repeat(ANSWER.length);
 
   ui.form.addEventListener('submit', handleGuess);
+
+  ui.planOpen.addEventListener('click', openPlan);
+  ui.planClose.addEventListener('click', closePlan);
+  ui.lightbox.addEventListener('click', closeLightbox);
+
+  ui.plan.addEventListener('click', (event) => {
+    const thumb = event.target.closest('.menu-thumb');
+    if (thumb) openLightbox(thumb.dataset.full, thumb.dataset.label);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!ui.lightbox.hidden) closeLightbox();
+    else if (!ui.plan.hidden) closePlan();
+  });
 
   try {
     extractor = await createExtractor();

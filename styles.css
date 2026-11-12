@@ -459,6 +459,7 @@ html.revealed .app {
 .reveal.is-visible .reveal-inner > *:nth-child(3) { transition-delay: 0.95s; }
 .reveal.is-visible .reveal-inner > *:nth-child(4) { transition-delay: 1.15s; }
 .reveal.is-visible .reveal-inner > *:nth-child(5) { transition-delay: 1.5s; }
+.reveal.is-visible .reveal-inner > *:nth-child(6) { transition-delay: 1.85s; }
 
 .reveal-kicker {
   margin: 0;
@@ -516,6 +517,356 @@ html.revealed .app {
 /* The trailing period in "answer." should sit tight against the word. */
 .reveal-place .reveal-dot {
   margin: 0;
+}
+
+.reveal-cta {
+  margin-top: 34px;
+  padding: 13px 30px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #eaf1fb;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
+}
+
+.reveal-cta:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.reveal-cta:active {
+  transform: translateY(1px);
+}
+
+/* Itinerary ------------------------------------------------------------- */
+
+.plan {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background-color: #05080c;
+  background-image: radial-gradient(
+    62vmax 48vmax at 50% -8%,
+    rgba(91, 141, 255, 0.14),
+    transparent 62%
+  );
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+.plan[hidden] {
+  display: none;
+}
+
+.plan.is-visible {
+  opacity: 1;
+}
+
+.plan-close {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #c2cede;
+  background: rgba(10, 15, 22, 0.72);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+.plan-close:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.plan-scroll {
+  width: min(640px, 100%);
+  margin: 0 auto;
+  padding: 76px 20px 72px;
+}
+
+.plan-head {
+  margin-bottom: 26px;
+}
+
+.plan-kicker {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #7f8ea3;
+}
+
+.plan-title {
+  margin: 4px 0 0;
+  font-size: clamp(1.9rem, 7vw, 2.6rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  color: #fff;
+}
+
+/* Timeline */
+
+.timeline {
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.tl {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.tl-time {
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #a9c8ff;
+}
+
+.tl-time span {
+  margin-left: 2px;
+  font-size: 0.72em;
+  color: #6f7f93;
+}
+
+.tl-body h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  color: #fff;
+}
+
+.tl-body p {
+  margin: 5px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Cards */
+
+.card {
+  margin-bottom: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.card-title {
+  margin: 0 0 16px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #7f8ea3;
+}
+
+.card-note {
+  margin: 16px 0 0;
+  font-size: 0.76rem;
+  color: #5f6c80;
+}
+
+/* Picks */
+
+.picks {
+  display: grid;
+  gap: 18px;
+}
+
+.pick-label {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 0.82rem;
+  color: #c2cede;
+}
+
+.pick-label em {
+  font-style: normal;
+  color: #6f7f93;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: 6px 13px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.chip.dinner {
+  color: #ffcac4;
+  background: rgba(240, 85, 74, 0.14);
+  border: 1px solid rgba(240, 85, 74, 0.36);
+}
+
+.chip.hh {
+  color: #bff0d2;
+  background: rgba(53, 199, 143, 0.13);
+  border: 1px solid rgba(53, 199, 143, 0.36);
+}
+
+/* Weather */
+
+.weather-loading {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #5f6c80;
+}
+
+.weather-main {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.weather-temp {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weather-at {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7f8ea3;
+}
+
+.weather-feels {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.weather-stats {
+  display: flex;
+  gap: 30px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weather-stats li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weather-stats span {
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7f8ea3;
+}
+
+.weather-stats strong {
+  font-size: 0.95rem;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-tip {
+  margin: 18px 0 0;
+  font-size: 0.85rem;
+  color: #a9c8ff;
+}
+
+/* Menus */
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.menu-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 8px;
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: zoom-in;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.menu-thumb:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.menu-thumb img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* Lightbox */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  background: rgba(4, 6, 9, 0.95);
+  cursor: zoom-out;
+}
+
+.lightbox[hidden] {
+  display: none;
+}
+
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 30px 90px -30px #000;
 }
 
 /* Small screens ---------------------------------------------------------- */

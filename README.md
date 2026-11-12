@@ -74,30 +74,64 @@ http://127.0.0.1:5173/?word=ocean
 
 ## The ending
 
-Solving the riddle doesn't show a "you win" modal — it fades the board out and reveals a dinner invitation:
+Solving the riddle doesn't show a "you win" modal — it fades the board out and reveals a dinner invitation over a full-bleed photo of the restaurant:
 
 ```
-[ answer. logo ]
 you won
 a dinner date
+answer.
 happy hour · see you there
 ```
 
-**Drop the logo at `assets/answer.png`.** It's shown on a dark background, so a PNG with a transparent background works best (an opaque white rectangle will read as a white block).
-
-If the file is missing, the reveal falls back to a typeset `answer.` wordmark, so the page never breaks.
+`assets/answer.png` is the backdrop. It fills the screen (`background-size: cover`) with a slow 11s drift and a gradient scrim behind the type, so a bright interior shot still reads.
 
 Timing lives in one constant in `game.js`:
 - `REVEAL_DELAY` (1400 ms) — how long the winning row stays on screen before the fade
+
+## The itinerary
+
+A `see the plan` button under the invitation opens a scrollable itinerary:
+
+- **timeline** — pickup 4:50–5:00 pm, dinner at 5:00 pm (with a note that happy hour runs 4:15–6:00 so both menus are available)
+- **my picks** — the highlighted menu items, colour-matched: red for the dinner menu, green for happy hour
+- **the weather** — live forecast for 5:00 pm from [Open-Meteo](https://open-meteo.com) (free, no API key), plus rain chance and sunset, with a generated tip
+- **the menus** — tap a thumbnail for a full-screen view
+
+### Changing the location
+
+The forecast uses fixed coordinates in `game.js`:
+
+```js
+const WEATHER = {
+  latitude: 36.1627,
+  longitude: -86.7816,
+  timezone: 'America/Chicago',
+};
+```
+
+Weather is fetched lazily the first time the itinerary opens, and fails gracefully to a text note if the network is down.
+
+### Menu assets
+
+The itinerary shows PNGs, not PDFs — browsers (iOS Safari especially) handle PDFs inconsistently. `assets/website+menu.pdf` and `assets/HH+2020.pdf` are the sources; regenerate the images with:
+
+```bash
+python scripts/pdf-to-images.py
+```
+
+That writes `assets/menu-1.png`, `assets/menu-2.png` and `assets/happy-hour-1.png` at 150 DPI. Requires `python -m pip install pymupdf`.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | Markup: board, HUD, loader overlay, reveal scene |
+| `index.html` | Markup: board, HUD, loader overlay, reveal scene, itinerary |
 | `styles.css` | Dark theme, closeness colour tiers, animations |
-| `game.js` | Model loading, embeddings, scoring, game state |
-| `assets/answer.png` | The logo shown in the reveal (drop it in here) |
+| `game.js` | Model loading, embeddings, scoring, game state, weather |
+| `scripts/pdf-to-images.py` | Renders the menu PDFs to PNGs for the itinerary |
+| `assets/answer.png` | Full-bleed backdrop for the reveal |
+| `assets/*.pdf` | Source menus |
+| `assets/*.png` (menus) | Generated menu images used by the itinerary |
 
 ## Known trade-offs
 

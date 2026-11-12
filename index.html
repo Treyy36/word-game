@@ -75,7 +75,89 @@
       <div class="reveal-rule" aria-hidden="true"></div>
       <p class="reveal-place">answer<span class="reveal-dot">.</span></p>
       <p class="reveal-sub">happy hour <span class="reveal-dot">&middot;</span> see you there</p>
+      <button id="plan-open" class="reveal-cta" type="button">see the plan</button>
     </div>
+  </div>
+
+  <section id="plan" class="plan" aria-label="Tonight's plan" hidden>
+    <button id="plan-close" class="plan-close" type="button">&larr; back</button>
+
+    <div class="plan-scroll">
+      <header class="plan-head">
+        <p class="plan-kicker">tonight</p>
+        <h2 class="plan-title">the plan</h2>
+      </header>
+
+      <ol class="timeline">
+        <li class="tl">
+          <span class="tl-time">4:50<span>pm</span> &ndash; 5:00<span>pm</span></span>
+          <div class="tl-body">
+            <h3>pickup</h3>
+          </div>
+        </li>
+        <li class="tl">
+          <span class="tl-time">5:00<span>pm</span></span>
+          <div class="tl-body">
+            <h3>dinner at answer.</h3>
+            <p>we&rsquo;ll be there during happy hour (4:15&ndash;6:00), so both menus are fair game</p>
+          </div>
+        </li>
+      </ol>
+
+      <section class="card">
+        <h3 class="card-title">my picks</h3>
+        <div class="picks">
+          <div class="pick-group">
+            <span class="pick-label">dinner menu <em>&mdash; in red</em></span>
+            <ul class="chips">
+              <li class="chip dinner">trout</li>
+              <li class="chip dinner">chicken</li>
+              <li class="chip dinner">burger</li>
+            </ul>
+          </div>
+          <div class="pick-group">
+            <span class="pick-label">happy hour <em>&mdash; in green</em></span>
+            <ul class="chips">
+              <li class="chip hh">potatoes</li>
+              <li class="chip hh">dip</li>
+              <li class="chip hh">peppers</li>
+              <li class="chip hh">asparagus</li>
+            </ul>
+          </div>
+        </div>
+        <p class="card-note">happy hour pricing is bar-top only</p>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title">the weather</h3>
+        <div id="weather-body" class="weather-body">
+          <p class="weather-loading">checking nashville&hellip;</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title">the menus</h3>
+        <div class="menu-grid">
+          <button class="menu-thumb" type="button" data-full="assets/happy-hour-1.png" data-label="happy hour">
+            <img src="assets/happy-hour-1.png" alt="Happy hour menu" loading="lazy" />
+            <span>happy hour</span>
+          </button>
+          <button class="menu-thumb" type="button" data-full="assets/menu-1.png" data-label="dinner">
+            <img src="assets/menu-1.png" alt="Dinner menu" loading="lazy" />
+            <span>dinner</span>
+          </button>
+          <button class="menu-thumb" type="button" data-full="assets/menu-2.png" data-label="drinks">
+            <img src="assets/menu-2.png" alt="Drinks menu" loading="lazy" />
+            <span>drinks</span>
+          </button>
+        </div>
+        <p class="card-note">tap a menu to read it</p>
+      </section>
+    </div>
+  </section>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <img id="lightbox-img" alt="" />
   </div>
 
   <script type="module" src="game.js"></script>
