@@ -139,9 +139,9 @@ Solving the riddle doesn't show a "you win" modal — it fades the board out and
 
 ```
 you won
-a dinner double date
+a dinner date
 answer.
-happy hour · see you there
+friends · happy hour · see you there
 ```
 
 `assets/answer.png` is the backdrop. It fills the screen (`background-size: cover`) with a slow 11s drift and a gradient scrim behind the type, so a bright interior shot still reads.
