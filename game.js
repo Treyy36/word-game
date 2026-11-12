@@ -324,6 +324,50 @@ function oneEditCandidates(word) {
   return [...candidates].filter((candidate) => dictionary.has(candidate));
 }
 
+/** Ordered longest-first so "answers" tries "s" only after longer suffixes fail. */
+const INFLECTIONS = [
+  ['ies', 'y'],
+  ['ing', ''],
+  ['est', ''],
+  ['ed', ''],
+  ['es', ''],
+  ['s', ''],
+];
+
+/**
+ * Collapses plurals and simple inflections onto their base word, so "answers"
+ * and "answer" are one guess. It only strips when the result is itself in the
+ * dictionary, which keeps "class" and "bus" intact.
+ */
+function canonicalWord(word) {
+  if (!dictionary || word.length < 4 || word.includes("'") || word.includes('-')) {
+    return word;
+  }
+
+  for (const [suffix, replacement] of INFLECTIONS) {
+    if (!word.endsWith(suffix)) continue;
+
+    const stem = word.slice(0, -suffix.length);
+    if (stem.length < 3) continue;
+
+    const candidates = [];
+    if (replacement) candidates.push(stem + replacement);
+    candidates.push(stem);
+
+    // "stopped" -> "stopp" -> "stop"
+    if (stem.at(-1) === stem.at(-2)) candidates.push(stem.slice(0, -1));
+
+    // "hiding" -> "hid" -> "hide"
+    candidates.push(`${stem}e`);
+
+    for (const candidate of candidates) {
+      if (dictionary.has(candidate)) return candidate;
+    }
+  }
+
+  return word;
+}
+
 /**
  * Suggests the intended word for a typo. One-edit candidates are ranked by how
  * common they are — without that, "answe" is just as plausible as "ansae".
@@ -453,7 +497,7 @@ function createEggRow(word, message) {
 /* -------------------------------------------------------------------------- */
 
 function registerGuess(word, rank, message = null) {
-  guesses.set(word, { rank });
+  guesses.set(canonicalWord(word), { rank, word });
   guessTotal += 1;
   ui.guessCount.textContent = String(guessTotal);
 
@@ -473,7 +517,7 @@ function registerGuess(word, rank, message = null) {
   ui.input.value = '';
   ui.input.focus();
 
-  if (word === ANSWER) {
+  if (rank === 1) {
     finish();
   } else if (message) {
     setStatus(message, 'info');
@@ -483,18 +527,23 @@ function registerGuess(word, rank, message = null) {
 }
 
 /** Echoes what a repeated guess already scored and points at its row. */
-function reportRepeat(word) {
-  const previous = guesses.get(word);
+function reportRepeat(key, typed = null) {
+  const previous = guesses.get(key);
   const detail = previous.egg ? previous.egg : `rank ${previous.rank}`;
-  setStatus(`You already guessed “${word}” — ${detail}.`, 'info');
-  flashRow(word);
+  setStatus(
+    typed
+      ? `“${typed}” → “${previous.word}” — you already guessed that (${detail}).`
+      : `You already guessed “${previous.word}” — ${detail}.`,
+    'info',
+  );
+  flashRow(previous.word);
   ui.input.value = '';
   ui.input.focus();
 }
 
 /** Easter eggs are counted but never ranked — they carry no rank. */
 function registerEgg(word, message) {
-  guesses.set(word, { egg: message });
+  guesses.set(canonicalWord(word), { egg: message, word });
   guessTotal += 1;
   ui.guessCount.textContent = String(guessTotal);
 
@@ -672,13 +721,10 @@ async function handleGuess(event) {
     return;
   }
 
-  if (guesses.has(word)) {
-    reportRepeat(word);
-    return;
-  }
-
   if (EASTER_EGGS.has(word)) {
-    registerEgg(word, EASTER_EGGS.get(word));
+    const eggKey = canonicalWord(word);
+    if (guesses.has(eggKey)) reportRepeat(eggKey);
+    else registerEgg(word, EASTER_EGGS.get(word));
     return;
   }
 
@@ -699,27 +745,28 @@ async function handleGuess(event) {
 
       typed = word;
       word = correction;
+    }
 
-      if (guesses.has(word)) {
-        setStatus(`“${typed}” → “${word}” — already guessed.`, 'info');
-        flashRow(word);
-        ui.input.value = '';
-        ui.input.focus();
-        return;
-      }
+    // "answers", "answered" and "answer" are one word, so they share a slot
+    // in the guess list and any of them can solve it.
+    const key = canonicalWord(word);
 
-      if (EASTER_EGGS.has(word)) {
-        registerEgg(word, EASTER_EGGS.get(word));
-        return;
-      }
+    if (guesses.has(key)) {
+      reportRepeat(key, typed);
+      return;
+    }
+
+    if (EASTER_EGGS.has(key)) {
+      registerEgg(key, EASTER_EGGS.get(key));
+      return;
     }
 
     setStatus('Thinking…');
 
     const vector = await getVector(word);
     const similarity = cosineSimilarity(vector, answerVector);
-    // Only the exact answer can sit at rank 1.
-    const rank = word === ANSWER ? 1 : Math.max(2, similarityToRank(similarity));
+    // Only the answer, or an inflection of it, sits at rank 1.
+    const rank = key === canonicalWord(ANSWER) ? 1 : Math.max(2, similarityToRank(similarity));
 
     registerGuess(
       word,
