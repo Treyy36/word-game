@@ -153,7 +153,7 @@ Timing lives in one constant in `game.js`:
 
 A `see the plan` button under the invitation opens a scrollable itinerary:
 
-- **timeline** — pickup 4:50–5:00 pm, dinner 5:00–5:45 pm (with a note that happy hour runs 4:15–6:00 so both menus are available), then dessert at home and the evening's plans
+- **timeline** — pickup 4:40–5:00 pm, dinner 5:00–5:45 pm (with a note that happy hour runs 4:15–6:00 so both menus are available), then dessert at home and the evening's plans
 - **the weather** — live forecast for 5:00 pm from [Open-Meteo](https://open-meteo.com) (free, no API key), plus rain chance and sunset, with a custom line
 - **my picks** — the highlighted menu items, with the highlight colour named so they're easy to find on the PDFs
 - **the menus** — tap a thumbnail for a full-screen view
