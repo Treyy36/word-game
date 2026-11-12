@@ -1,0 +1,12 @@
+{
+  "name": "trey-texto-build",
+  "private": true,
+  "type": "module",
+  "description": "One-off build scripts for trey-texto assets.",
+  "scripts": {
+    "ranks": "node build-ranks.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.7.0"
+  }
+}

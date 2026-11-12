@@ -1,6 +1,6 @@
 # trey-texto
 
-A small browser word game in the style of [Contexto](https://contexto.me): guess the secret word, and every guess is scored **0–100** by how close its *meaning* is to the answer. Pure HTML/CSS/JS — no build step, no server, no API keys.
+A small browser word game in the style of [Contexto](https://contexto.me): guess the secret word, and every guess gets a **literal rank** — the number of the 10,000 most common English words that sit closer in *meaning* to the answer, plus one. Pure HTML/CSS/JS: no server, no API keys, nothing to compile at runtime.
 
 The answer is hard-coded to `"answer"` in `game.js`.
 
@@ -33,35 +33,61 @@ Pages rebuilds automatically in about 30 seconds. `.nojekyll` keeps Jekyll from 
 
 1. The answer and each guess are embedded into a 384-dimension "meaning vector" using [`all-MiniLM-L6-v2`](https://huggingface.co/Xenova/all-MiniLM-L6-v2) running locally via [Transformers.js](https://huggingface.co/docs/transformers.js) (ONNX Runtime, WASM backend).
 2. Similarity is **cosine similarity** between the two vectors.
-3. That value becomes a **rank**: `1` is the answer, larger numbers are further away.
+3. That similarity becomes a **literal rank**: how many of the 10,000 most common English words sit closer to the answer than your guess, plus one.
 
-| cosine | ~rank | example vs `"answer"` |
+The rank is a real position, not a curve. `assets/ranks.txt` ships those 10,000 words already sorted by similarity to the answer, so scoring a guess is just finding where it slots in.
+
+| rank | example vs `"answer"` | |
 | --- | --- | --- |
-| 1.00 | 1 | `answer` (exact match) |
-| 0.85 | ~4 | near-synonyms |
-| 0.72 | ~16 | `question` |
-| 0.60 | ~54 | `response` |
-| 0.40 | ~400 | `dog` |
-| 0.30 | ~1,100 | `banana` |
-| 0.15 | ~5,000 | unrelated |
-| 0.00 | ~22,000 | nothing in common |
+| 1 | `answer` | exact match |
+| 4 | `question` | three words are closer |
+| 6 | `reply` | |
+| 8 | `response` | |
+| 26 | `ask` | |
+| 684 | `dog` | |
+| 1,535 | `pizza` | |
+| 5,291 | `banana` | |
+| 9,749 | `brontosaurus` | bottom of the vocabulary |
 
-Only the exact answer can reach rank 1; every other guess starts at 2 or worse.
+Only the answer — or an inflection of it — can reach rank 1; every other guess starts at 2 or worse. Guesses *outside* the 10,000 (like `brontosaurus`) are still embedded in the browser and slotted into the same ordered list, so the count stays honest.
 
 Each new guess is **pinned to the top** of the board so it never gets lost, and the row it displaces drops back into rank order underneath. Repeat guesses don't add a row — they flash the existing one and echo its rank.
 
-### What the rank actually is
+### The vocabulary
 
-It is a **distance index**, not a literal position in a vocabulary. A real rank would mean "there are 3,472 words closer than this one", which requires embedding a whole word list up front — impractical in a browser (173k words through WASM would take tens of minutes). `similarityToRank()` instead maps similarity through `exp(RANK_K * (1 - closeness))`, which is monotonic and deterministic: the *ordering* is truthful, and the magnitudes are tuned to feel Contexto-like.
+`scripts/build-ranks.mjs` builds the table:
+
+- vocabulary = the top 10,000 entries of `assets/word-frequency.txt` that are also in the ENABLE dictionary, lowercase a–z only
+- each word is embedded **one at a time** — batching changes the pooled vector for short inputs, and the browser only ever embeds a single word, so single encodes are the only ones that match production
+- the list is sorted by similarity to the answer and written to `assets/ranks.txt` (166 KB, ~60 KB gzipped)
+
+```powershell
+cd scripts
+npm install
+node build-ranks.mjs                # answer = "answer", 10,000 words
+node build-ranks.mjs banana 20000   # different answer, bigger vocabulary
+```
+
+The whole build takes about 10 seconds. A bigger vocabulary means bigger numbers and finer discrimination; 10,000 keeps the table under 200 KB while separating the top of the list cleanly.
+
+### If the table is missing
+
+`?word=` changes the answer, which invalidates every number in the table. `loadRankTable()` reads the header (`#answer=answer size=10000`) and refuses a table built for a different word, logging a warning and falling back to the old exponential curve:
+
+```js
+rank = exp(RANK_K * (1 - closeness))   // SIM_MIN = 0.1, RANK_K = 9
+```
+
+That is a monotonic distance index rather than a real count, so the magnitudes get fuzzy but the ordering is still correct. Re-run `build-ranks.mjs` for the new answer to get literal ranks back.
 
 ### Tuning
 
 ```js
-const SIM_MIN = 0.1;   // similarity that maps to the largest common ranks
-const RANK_K  = 9;     // curve steepness (raise = ranks climb faster)
+const SIM_MIN = 0.1;   // fallback curve: similarity that maps to the largest ranks
+const RANK_K  = 9;     // fallback curve: steepness (raise = ranks climb faster)
 ```
 
-Raise `RANK_K` or lower `SIM_MIN` if good guesses feel too generous.
+With the table loaded, the thing worth tuning is instead the vocabulary size and the tier boundaries in `tierOf()` / `tierMessage()` — currently the top 0.1%, 1%, 10%, 40% and 80% of the vocabulary.
 
 ## Changing the answer
 
@@ -69,11 +95,20 @@ Raise `RANK_K` or lower `SIM_MIN` if good guesses feel too generous.
 const ANSWER = (params.get('word') || 'answer').trim().toLowerCase();
 ```
 
-Edit that literal, or test alternate words without touching code:
+Edit that literal, then rebuild the rank table so the numbers describe the new word:
+
+```powershell
+cd scripts
+node build-ranks.mjs ocean
+```
+
+To try other words without touching code:
 
 ```
 http://127.0.0.1:5173/?word=ocean
 ```
+
+That path uses the fallback curve, since the shipped table was built for a different answer.
 
 ## The ending
 
@@ -131,10 +166,12 @@ That writes `assets/menu-1.png`, `assets/menu-2.png` and `assets/happy-hour-1.pn
 | `index.html` | Markup: board, HUD, loader overlay, reveal scene, itinerary |
 | `styles.css` | Dark theme, closeness colour tiers, animations |
 | `game.js` | Model loading, embeddings, scoring, game state, weather |
+| `scripts/build-ranks.mjs` | Builds `assets/ranks.txt` — the literal rank vocabulary |
 | `scripts/pdf-to-images.py` | Renders the menu PDFs to PNGs for the itinerary |
 | `assets/answer.png` | Full-bleed backdrop for the reveal |
+| `assets/ranks.txt` | 10,000 words sorted by similarity to the answer (the rank table) |
 | `assets/words.txt` | ENABLE word list used to reject misspellings |
-| `assets/word-frequency.txt` | Frequency-ordered words, used to resolve typos |
+| `assets/word-frequency.txt` | Frequency-ordered words: typo resolution + rank vocabulary source |
 | `assets/*.pdf` | Source menus |
 | `assets/*.png` (menus) | Generated menu images used by the itinerary |
 
@@ -155,5 +192,5 @@ They are checked before word validation, so they work even for names that aren't
 
 - **`all-MiniLM-L6-v2` is a sentence model.** It captures *association* more than strict synonymy, so `question` scores above `reply` for the answer `answer`. I benchmarked `bge-small-en-v1.5` too — it had a higher noise floor (`~0.55` for unrelated words) and a narrower spread, so MiniLM gives a better game curve.
 - **Spelling is checked, and typos are auto-corrected.** Guesses must appear in `assets/words.txt` (ENABLE, ~173k entries) and be a single word. Anything else is run through a one-edit search — insert, delete, swap or substitute a letter — and the best candidate is used, with the swap announced in the status line (*"cappucino" → "cappuccino"*). Candidates are ranked by real-world frequency from `assets/word-frequency.txt`, because edit distance alone can't distinguish `answer` from `ansae`. If nothing plausible turns up, the guess is rejected. If the lists fail to load, `looksLikeWord()` takes over as a permissive fallback. (The free Datamuse API can't be used here — it sends no CORS headers, so browsers block it.)
-- **No rank number.** Contexto shows a rank against a fixed vocabulary (~100k words). Doing that here means embedding the whole vocabulary once, which is a much heavier job. Showing a 0–100 score avoids shipping a word list.
+- **The vocabulary is 10,000 words, not Contexto's ~100k.** Ranks are literal counts, so they are only as fine-grained as the list behind them: nothing can score worse than 10,001, and the answer's nearest neighbours land at 2–10 rather than 2–50. A 100k table would be ~1.6 MB and take about ten times as long to build, for a game that is usually solved in a dozen guesses.
 - **Plurals and inflections count as one word.** `canonicalWord()` strips a common ending (`-s`, `-es`, `-ies`, `-ed`, `-ing`, `-est`) and returns the first stem that is itself a dictionary word, so `answers`, `answered` and `answer` share a single slot on the board and any of them can solve it. The board still shows what she actually typed. `-er`/`-ly` are deliberately *not* stripped, since that would merge `corner` into `corn` and `letter` into `let`. A few unrelated pairs still collapse (`news` → `new`, `means` → `mean`), but only for duplicate detection and the win check — scoring and display always use the raw word.

@@ -3,19 +3,23 @@
  *
  * HOW THE SCORING WORKS
  * ---------------------
- * Every word (the answer and each guess) is turned into a 384-dimension
- * "meaning vector" by a small sentence-transformer model running locally in
- * the browser (all-MiniLM-L6-v2 via Transformers.js / ONNX Runtime WASM).
- * Similarity between two vectors is cosine similarity, which we convert into a
- * rank: 1 is the answer, and larger numbers are further away in meaning.
- * No server, no API key, no network call per guess.
+ * Every word is turned into a 384-dimension "meaning vector" by a small
+ * sentence-transformer model running locally in the browser
+ * (all-MiniLM-L6-v2 via Transformers.js / ONNX Runtime WASM).
  *
- * TUNING
- * ------
- * rank = exp(RANK_K * (1 - closeness)), where closeness normalises cosine
- * similarity against SIM_MIN. This is a monotonic distance index — it is NOT a
- * count of how many words are closer, which would require embedding a whole
- * vocabulary up front.
+ * The rank is a literal count. assets/ranks.txt ships the 10,000 most common
+ * English words pre-sorted by cosine similarity to the answer, so rank N means
+ * "exactly N-1 vocabulary words are closer to the answer than this one" and the
+ * answer itself is rank 1. No server, no API key, no network call per guess.
+ *
+ * Guesses outside those 10,000 are embedded here and slotted into the same
+ * ordered list, so the count stays honest for obscure words too.
+ *
+ * FALLBACK
+ * --------
+ * If the table is missing — or was built for a different answer, which happens
+ * as soon as you use `?word=` — rank = exp(RANK_K * (1 - closeness)) instead: a
+ * monotonic distance index rather than a real count.
  *   - SIM_MIN: similarity that maps to the largest common ranks
  *   - RANK_K:  curve steepness (higher = ranks climb faster with distance)
  */
@@ -27,17 +31,22 @@ const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 const DICTIONARY_URL = 'assets/words.txt';
 /** Frequency-ordered words, used to pick the likely intent behind a typo. */
 const FREQUENCY_URL = 'assets/word-frequency.txt';
+/**
+ * The vocabulary the ranks are counted against: 10,000 common words sorted by
+ * similarity to the answer. Built by scripts/build-ranks.mjs.
+ */
+const RANKS_URL = 'assets/ranks.txt';
 const DICTIONARY_TIMEOUT_MS = 20000;
 
 /**
- * Rank curve. Similarity maps to a rank where 1 is the answer and larger
- * numbers mean further away. SIM_MIN is the similarity that lands at
+ * Rank curve, used only when the literal rank table is unavailable. Similarity
+ * maps to a rank where 1 is the answer. SIM_MIN is the similarity that lands at
  * exp(RANK_K) ≈ 8,100; below it the rank keeps climbing smoothly.
  */
 const SIM_MIN = 0.1;
 const RANK_K = 9;
 const MAX_RANK = 999999;
-/** Rank that renders as zero-width bar — anything worse is clamped. */
+/** Rank that renders as a zero-width bar when the fallback curve is in use. */
 const BAR_MAX_RANK = 50000;
 
 /** Guesses that get a note instead of a score. Checked before any validation. */
@@ -91,6 +100,12 @@ const guesses = new Map();
 let dictionary = null;
 /** word -> position in the frequency list (0 = most common). */
 let frequencyRank = null;
+/**
+ * Populated by loadRankTable(): { answer, size, byWord, scores } where scores
+ * is every vocabulary similarity in descending order. Null means the shipped
+ * table is missing or describes a different answer.
+ */
+let rankTable = null;
 
 let guessTotal = 0;
 let bestRank = Number.POSITIVE_INFINITY;
@@ -173,10 +188,54 @@ function similarityToRank(similarity) {
   return Math.max(1, Math.min(MAX_RANK, Math.round(rank)));
 }
 
+/**
+ * Inserts a similarity into the shipped ordered list and returns its position.
+ * Everything at or above index `low` is closer, so `low + 1` is the rank.
+ */
+function rankForSimilarity(similarity) {
+  const scores = rankTable.scores;
+  let low = 0;
+  let high = scores.length;
+
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (scores[mid] > similarity) low = mid + 1;
+    else high = mid;
+  }
+
+  return low + 1;
+}
+
+/** The literal rank of a word we actually shipped a score for, else null. */
+function vocabularyRank(word, key) {
+  if (!rankTable) return null;
+  return rankTable.byWord.get(word) ?? rankTable.byWord.get(key) ?? null;
+}
+
+/**
+ * The rank for one guess: its exact position among the shipped vocabulary if we
+ * have one, otherwise its position among the same list by measured similarity.
+ * Falls back to the exponential curve if no table is loaded at all.
+ */
+async function scoreWord(word, key) {
+  const exact = vocabularyRank(word, key);
+  if (exact !== null) return exact;
+
+  const vector = await getVector(word);
+  const similarity = cosineSimilarity(vector, answerVector);
+
+  return rankTable ? rankForSimilarity(similarity) : similarityToRank(similarity);
+}
+
+/** Worst rank that still draws a bar — the vocabulary size when we have one. */
+function barMaxRank() {
+  return rankTable ? rankTable.size : BAR_MAX_RANK;
+}
+
 /** Bar width for a rank — logarithmic so mid-range ranks stay distinguishable. */
 function closenessPercent(rank) {
   if (rank <= 1) return 100;
-  const pct = 100 * (1 - Math.log10(rank) / Math.log10(BAR_MAX_RANK));
+  const pct = 100 * (1 - Math.log10(rank) / Math.log10(barMaxRank()));
   return Math.max(0, Math.min(100, Math.round(pct)));
 }
 
@@ -187,20 +246,25 @@ function closenessPercent(rank) {
 function tierColor(rank) {
   if (rank <= 1) return '#35d07f';
 
-  const closeness = Math.min(1, Math.max(0, 1 - Math.log10(rank) / Math.log10(BAR_MAX_RANK)));
+  const closeness = Math.min(1, Math.max(0, 1 - Math.log10(rank) / Math.log10(barMaxRank())));
   const hue = Math.round(120 * closeness); // 120 = green, 60 = yellow, 0 = red
   const lightness = Math.round(46 + 12 * (1 - closeness));
 
   return `hsl(${hue} 68% ${lightness}%)`;
 }
 
+/**
+ * Tier boundaries. With 10,000 words to count against, "far off" has to start
+ * much earlier than it did on the old 999,999 ceiling — these are the top 0.1%,
+ * 1%, 10%, 40% and 80% of the vocabulary.
+ */
 function tierOf(rank) {
   if (rank <= 1) return 'solved';
   if (rank <= 10) return 'hot';
   if (rank <= 100) return 'warm';
   if (rank <= 1000) return 'mild';
-  if (rank <= 10000) return 'cool';
-  if (rank <= 50000) return 'cold';
+  if (rank <= 4000) return 'cool';
+  if (rank <= 8000) return 'cold';
   return 'freezing';
 }
 
@@ -208,8 +272,8 @@ function tierMessage(rank) {
   if (rank <= 10) return 'Very close — you are basically there.';
   if (rank <= 100) return 'Close. Same neighbourhood.';
   if (rank <= 1000) return 'Same general area of meaning.';
-  if (rank <= 10000) return 'Far off — a different area of meaning.';
-  if (rank <= 50000) return 'Very far off.';
+  if (rank <= 4000) return 'Far off — a different area of meaning.';
+  if (rank <= 8000) return 'Very far off.';
   return 'Nothing in common. Try a completely different direction.';
 }
 
@@ -278,6 +342,52 @@ async function loadWordLists() {
     frequencyRank = null;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * Loads the precomputed rank table: one "word similarity" pair per line, in
+ * descending order of similarity to the answer, so a word's rank is just its
+ * line number. The header records which answer it was built for — if that
+ * doesn't match ANSWER (somebody used `?word=`), every number in it is wrong
+ * and we discard it rather than lie.
+ */
+async function loadRankTable() {
+  try {
+    const response = await fetch(RANKS_URL);
+    if (!response.ok) throw new Error(`rank table request failed: ${response.status}`);
+
+    const [header, ...rows] = (await response.text()).split('\n');
+    const meta = /answer=(\S+)\s+size=(\d+)/.exec(header);
+    if (!meta) throw new Error('rank table header is missing its answer/size fields');
+
+    const [, tableAnswer] = meta;
+    if (tableAnswer !== ANSWER) {
+      console.warn(
+        `Rank table was built for "${tableAnswer}", not "${ANSWER}" — using the fallback curve.`,
+      );
+      return;
+    }
+
+    const byWord = new Map();
+    const scores = [];
+
+    for (const row of rows) {
+      const [word, score] = row.trim().split(/\s+/);
+      if (!word || score === undefined) continue;
+
+      // First occurrence wins — the list is closest-first, so a word that got
+      // listed twice should keep its better rank.
+      if (!byWord.has(word)) byWord.set(word, scores.length + 1);
+      scores.push(Number(score));
+    }
+
+    rankTable = { answer: tableAnswer, size: scores.length, byWord, scores: Float32Array.from(scores) };
+    console.info(`Rank table loaded: ${scores.length} words scored against "${tableAnswer}".`);
+  } catch (error) {
+    // The exponential curve keeps the game playable without it.
+    console.warn('Rank table unavailable, falling back to the similarity curve.', error);
+    rankTable = null;
   }
 }
 
@@ -763,10 +873,9 @@ async function handleGuess(event) {
 
     setStatus('Thinking…');
 
-    const vector = await getVector(word);
-    const similarity = cosineSimilarity(vector, answerVector);
     // Only the answer, or an inflection of it, sits at rank 1.
-    const rank = key === canonicalWord(ANSWER) ? 1 : Math.max(2, similarityToRank(similarity));
+    const rank =
+      key === canonicalWord(ANSWER) ? 1 : Math.max(2, await scoreWord(word, key));
 
     registerGuess(
       word,
@@ -808,12 +917,13 @@ async function start() {
 
   // Starts downloading immediately; awaited before the input unlocks.
   const wordListsLoad = loadWordLists();
+  const rankTableLoad = loadRankTable();
 
   try {
     extractor = await createExtractor();
     ui.loaderText.textContent = 'Encoding the secret word…';
     answerVector = await getVector(ANSWER);
-    await wordListsLoad;
+    await Promise.all([wordListsLoad, rankTableLoad]);
 
     ui.loader.hidden = true;
     ui.input.disabled = false;
