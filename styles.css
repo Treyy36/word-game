@@ -374,6 +374,11 @@ body {
 
 /* Reveal scene ----------------------------------------------------------- */
 
+/* Once the reveal is up the page behind it should not scroll. */
+body.revealed {
+  overflow: hidden;
+}
+
 /* The board recedes as the reveal fades in over it. */
 body.revealed .app {
   filter: blur(6px);
