@@ -249,13 +249,23 @@ body {
   to   { opacity: 1; transform: none; }
 }
 
+/* Repeat guess: point at the row that already holds the answer. */
+.guess-row.flash {
+  animation: rowFlash 0.9s ease;
+}
+
+@keyframes rowFlash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(91, 141, 255, 0); }
+  25%      { box-shadow: 0 0 0 3px rgba(91, 141, 255, 0.5); }
+}
+
 .guess-word {
   font-weight: 600;
   letter-spacing: 0.01em;
   overflow-wrap: anywhere;
 }
 
-.guess-score {
+.guess-rank {
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   color: var(--tier);

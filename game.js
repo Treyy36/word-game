@@ -6,18 +6,18 @@
  * Every word (the answer and each guess) is turned into a 384-dimension
  * "meaning vector" by a small sentence-transformer model running locally in
  * the browser (all-MiniLM-L6-v2 via Transformers.js / ONNX Runtime WASM).
- * Similarity between two vectors is cosine similarity, which we squash into a
- * friendly 0-100 score. No server, no API key, no network call per guess.
+ * Similarity between two vectors is cosine similarity, which we convert into a
+ * rank: 1 is the answer, and larger numbers are further away in meaning.
+ * No server, no API key, no network call per guess.
  *
  * TUNING
  * ------
- * Cosine similarity for this model is not zero for unrelated words — single
- * words cluster around 0.27-0.40 even when they have nothing to do with each
- * other. So we remap [SIM_FLOOR, SIM_CEIL] onto [0, 100]: anything at or below
- * the noise floor scores 0, near-synonyms (~0.85) score in the 90s.
- *   - SIM_FLOOR: cosine similarity that maps to 0 (raise to be stricter)
- *   - SIM_CEIL:  cosine similarity that maps to 100
- *   - SIM_GAMMA: curve sharpness (higher = only very close words score high)
+ * rank = exp(RANK_K * (1 - closeness)), where closeness normalises cosine
+ * similarity against SIM_MIN. This is a monotonic distance index — it is NOT a
+ * count of how many words are closer, which would require embedding a whole
+ * vocabulary up front.
+ *   - SIM_MIN: similarity that maps to the largest common ranks
+ *   - RANK_K:  curve steepness (higher = ranks climb faster with distance)
  */
 
 const MODEL_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
@@ -27,9 +27,16 @@ const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 const DICTIONARY_URL = 'assets/words.txt';
 const DICTIONARY_TIMEOUT_MS = 20000;
 
-const SIM_FLOOR = 0.3;
-const SIM_CEIL = 0.95;
-const SIM_GAMMA = 1.0;
+/**
+ * Rank curve. Similarity maps to a rank where 1 is the answer and larger
+ * numbers mean further away. SIM_MIN is the similarity that lands at
+ * exp(RANK_K) ≈ 8,100; below it the rank keeps climbing smoothly.
+ */
+const SIM_MIN = 0.1;
+const RANK_K = 9;
+const MAX_RANK = 999999;
+/** Rank that renders as zero-width bar — anything worse is clamped. */
+const BAR_MAX_RANK = 50000;
 
 /** Guesses that get a note instead of a score. Checked before any validation. */
 const EASTER_EGGS = new Map([
@@ -52,7 +59,7 @@ const ui = {
   status: document.getElementById('status'),
   list: document.getElementById('guess-list'),
   guessCount: document.getElementById('guess-count'),
-  bestScore: document.getElementById('best-score'),
+  closestRank: document.getElementById('closest-rank'),
   answerSlots: document.getElementById('answer-slots'),
   loader: document.getElementById('loader'),
   loaderBar: document.getElementById('loader-bar'),
@@ -74,13 +81,15 @@ let extractor = null;
 let answerVector = null;
 
 const vectorCache = new Map();
-const guessedWords = new Set();
+
+/** word -> { rank } for scored guesses, { egg } for easter eggs. */
+const guesses = new Map();
 
 /** Populated by loadDictionary(); null means fall back to the heuristic. */
 let dictionary = null;
 
 let guessTotal = 0;
-let best = 0;
+let bestRank = Number.POSITIVE_INFINITY;
 let gameOver = false;
 let busy = false;
 let revealed = false;
@@ -154,28 +163,35 @@ function cosineSimilarity(a, b) {
   return denominator === 0 ? 0 : dot / denominator;
 }
 
-function similarityToScore(similarity) {
-  const stretched = (similarity - SIM_FLOOR) / (SIM_CEIL - SIM_FLOOR);
-  const clamped = Math.min(1, Math.max(0, stretched));
-  return Math.round(Math.pow(clamped, SIM_GAMMA) * 100);
+function similarityToRank(similarity) {
+  const closeness = (similarity - SIM_MIN) / (1 - SIM_MIN);
+  const rank = Math.exp(RANK_K * (1 - closeness));
+  return Math.max(1, Math.min(MAX_RANK, Math.round(rank)));
 }
 
-function tierOf(score) {
-  if (score >= 100) return 'solved';
-  if (score >= 80) return 'hot';
-  if (score >= 60) return 'warm';
-  if (score >= 40) return 'mild';
-  if (score >= 22) return 'cool';
-  if (score >= 10) return 'cold';
+/** Bar width for a rank — logarithmic so mid-range ranks stay distinguishable. */
+function closenessPercent(rank) {
+  if (rank <= 1) return 100;
+  const pct = 100 * (1 - Math.log10(rank) / Math.log10(BAR_MAX_RANK));
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
+
+function tierOf(rank) {
+  if (rank <= 1) return 'solved';
+  if (rank <= 10) return 'hot';
+  if (rank <= 100) return 'warm';
+  if (rank <= 1000) return 'mild';
+  if (rank <= 10000) return 'cool';
+  if (rank <= 50000) return 'cold';
   return 'freezing';
 }
 
-function tierMessage(score) {
-  if (score >= 80) return 'Scorching. You are basically there. 🔥';
-  if (score >= 60) return 'Warm — same neighbourhood.';
-  if (score >= 40) return 'Cool. Related, but not yet.';
-  if (score >= 22) return 'Cold. Different area of meaning.';
-  if (score >= 10) return 'Freezing. Almost nothing in common. 🧊';
+function tierMessage(rank) {
+  if (rank <= 10) return 'Scorching. You are basically there. 🔥';
+  if (rank <= 100) return 'Warm — same neighbourhood.';
+  if (rank <= 1000) return 'Cool. Related, but not yet.';
+  if (rank <= 10000) return 'Cold. Different area of meaning.';
+  if (rank <= 50000) return 'Freezing. Almost nothing in common. 🧊';
   return 'Glacial. Try a completely different direction.';
 }
 
@@ -260,18 +276,19 @@ function setStatus(message, tone = 'muted') {
   ui.status.dataset.tone = tone;
 }
 
-function createRow(word, score) {
+function createRow(word, rank) {
   const row = document.createElement('li');
-  row.className = `guess-row ${tierOf(score)}`;
-  row.dataset.score = String(score);
+  row.className = `guess-row ${tierOf(rank)}`;
+  row.dataset.rank = String(rank);
+  row.dataset.word = word;
 
   const wordEl = document.createElement('span');
   wordEl.className = 'guess-word';
   wordEl.textContent = word;
 
-  const scoreEl = document.createElement('span');
-  scoreEl.className = 'guess-score';
-  scoreEl.textContent = String(score);
+  const rankEl = document.createElement('span');
+  rankEl.className = 'guess-rank';
+  rankEl.textContent = String(rank);
 
   const bar = document.createElement('span');
   bar.className = 'guess-bar';
@@ -279,20 +296,21 @@ function createRow(word, score) {
   fill.className = 'guess-bar-fill';
   bar.append(fill);
 
-  row.append(wordEl, scoreEl, bar);
+  row.append(wordEl, rankEl, bar);
 
-  // Animate the bar from 0 → score on the next frame.
+  // Animate the bar to this rank's closeness on the next frame.
+  const width = closenessPercent(rank);
   requestAnimationFrame(() => {
-    fill.style.width = `${score}%`;
+    fill.style.width = `${width}%`;
   });
 
   return row;
 }
 
-/** Keeps the board ordered best-first, like Contexto. */
-function insertSorted(row, score) {
+/** Keeps the board ordered closest-first, so rank 1 sits at the top. */
+function insertSorted(row, rank) {
   const sibling = Array.from(ui.list.children).find(
-    (child) => Number(child.dataset.score) < score,
+    (child) => Number(child.dataset.rank) > rank,
   );
 
   if (sibling) ui.list.insertBefore(row, sibling);
@@ -303,6 +321,7 @@ function insertSorted(row, score) {
 function createEggRow(word, message) {
   const row = document.createElement('li');
   row.className = 'guess-row egg';
+  row.dataset.word = word;
 
   const wordEl = document.createElement('span');
   wordEl.className = 'guess-word';
@@ -320,18 +339,18 @@ function createEggRow(word, message) {
 /* Game flow                                                                  */
 /* -------------------------------------------------------------------------- */
 
-function registerGuess(word, score) {
-  guessedWords.add(word);
+function registerGuess(word, rank) {
+  guesses.set(word, { rank });
   guessTotal += 1;
   ui.guessCount.textContent = String(guessTotal);
 
-  if (score > best) {
-    best = score;
-    ui.bestScore.textContent = String(score);
-    ui.bestScore.classList.add('revealed');
+  if (rank < bestRank) {
+    bestRank = rank;
+    ui.closestRank.textContent = String(rank);
+    ui.closestRank.classList.add('revealed');
   }
 
-  insertSorted(createRow(word, score), score);
+  insertSorted(createRow(word, rank), rank);
 
   ui.input.value = '';
   ui.input.focus();
@@ -339,13 +358,13 @@ function registerGuess(word, score) {
   if (word === ANSWER) {
     finish();
   } else {
-    setStatus(tierMessage(score), score >= 60 ? 'hot' : 'muted');
+    setStatus(tierMessage(rank), rank <= 100 ? 'hot' : 'muted');
   }
 }
 
-/** Easter eggs are counted but never ranked — they carry no score. */
+/** Easter eggs are counted but never ranked — they carry no rank. */
 function registerEgg(word, message) {
-  guessedWords.add(word);
+  guesses.set(word, { egg: message });
   guessTotal += 1;
   ui.guessCount.textContent = String(guessTotal);
 
@@ -354,6 +373,17 @@ function registerEgg(word, message) {
   ui.input.value = '';
   ui.input.focus();
   setStatus('');
+}
+
+/** Draws the eye to an existing row when someone repeats a guess. */
+function flashRow(word) {
+  const row = Array.from(ui.list.children).find((child) => child.dataset.word === word);
+  if (!row) return;
+
+  row.classList.remove('flash');
+  void row.offsetWidth; // force reflow so the animation can restart
+  row.classList.add('flash');
+  row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function revealAnswer() {
@@ -511,9 +541,13 @@ async function handleGuess(event) {
     return;
   }
 
-  if (guessedWords.has(word)) {
-    setStatus(`You already tried “${word}”.`, 'error');
-    ui.input.select();
+  if (guesses.has(word)) {
+    const previous = guesses.get(word);
+    const detail = previous.egg ? previous.egg : `rank ${previous.rank}`;
+    setStatus(`You already guessed “${word}” — ${detail}.`, 'info');
+    flashRow(word);
+    ui.input.value = '';
+    ui.input.focus();
     return;
   }
 
@@ -536,10 +570,10 @@ async function handleGuess(event) {
 
     const vector = await getVector(word);
     const similarity = cosineSimilarity(vector, answerVector);
-    // Only the exact answer can score 100.
-    const score = word === ANSWER ? 100 : Math.min(99, similarityToScore(similarity));
+    // Only the exact answer can sit at rank 1.
+    const rank = word === ANSWER ? 1 : Math.max(2, similarityToRank(similarity));
 
-    registerGuess(word, score);
+    registerGuess(word, rank);
   } catch (error) {
     console.error(error);
     setStatus('Something went wrong scoring that word. Try again.', 'error');

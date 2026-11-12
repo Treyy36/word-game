@@ -33,32 +33,33 @@ Pages rebuilds automatically in about 30 seconds. `.nojekyll` keeps Jekyll from 
 
 1. The answer and each guess are embedded into a 384-dimension "meaning vector" using [`all-MiniLM-L6-v2`](https://huggingface.co/Xenova/all-MiniLM-L6-v2) running locally via [Transformers.js](https://huggingface.co/docs/transformers.js) (ONNX Runtime, WASM backend).
 2. Similarity is **cosine similarity** between the two vectors.
-3. That raw value is remapped onto a friendly 0–100 scale.
+3. That value becomes a **rank**: `1` is the answer, larger numbers are further away.
 
-Raw cosine similarity is *not* zero for unrelated words — with this model, single words cluster around `0.27–0.40` regardless of meaning. So the mapping is calibrated to the model's real distribution:
-
-| cosine | ~score | example vs `"answer"` |
+| cosine | ~rank | example vs `"answer"` |
 | --- | --- | --- |
-| 0.30 | 0 | `banana`, `table` |
-| 0.40 | 15 | `dog` |
-| 0.60 | 46 | `response` |
-| 0.72 | 65 | `question` |
-| 0.85 | 85 | near-synonyms |
-| 1.00 | 100 | `answer` (exact match) |
+| 1.00 | 1 | `answer` (exact match) |
+| 0.85 | ~4 | near-synonyms |
+| 0.72 | ~16 | `question` |
+| 0.60 | ~54 | `response` |
+| 0.40 | ~400 | `dog` |
+| 0.30 | ~1,100 | `banana` |
+| 0.15 | ~5,000 | unrelated |
+| 0.00 | ~22,000 | nothing in common |
 
-Only the exact answer can score 100 — everything else is capped at 99.
+Only the exact answer can reach rank 1; every other guess starts at 2 or worse.
+
+### What the rank actually is
+
+It is a **distance index**, not a literal position in a vocabulary. A real rank would mean "there are 3,472 words closer than this one", which requires embedding a whole word list up front — impractical in a browser (173k words through WASM would take tens of minutes). `similarityToRank()` instead maps similarity through `exp(RANK_K * (1 - closeness))`, which is monotonic and deterministic: the *ordering* is truthful, and the magnitudes are tuned to feel Contexto-like.
 
 ### Tuning
 
-All three knobs live at the top of `game.js`:
-
 ```js
-const SIM_FLOOR = 0.3;   // cosine that maps to 0  (raise = stricter)
-const SIM_CEIL  = 0.95;  // cosine that maps to 100
-const SIM_GAMMA = 1.0;   // curve sharpness (raise = only very close words score high)
+const SIM_MIN = 0.1;   // similarity that maps to the largest common ranks
+const RANK_K  = 9;     // curve steepness (raise = ranks climb faster)
 ```
 
-If a different answer word feels too easy or too hard, adjust `SIM_FLOOR` first.
+Raise `RANK_K` or lower `SIM_MIN` if good guesses feel too generous.
 
 ## Changing the answer
 
@@ -145,7 +146,7 @@ const EASTER_EGGS = new Map([
 ]);
 ```
 
-They are checked before word validation, so they work even for names that aren't in the dictionary. Egg rows are prepended to the board, carry no score, and don't affect the best-score stat.
+They are checked before word validation, so they work even for names that aren't in the dictionary. Egg rows are prepended to the board, carry no rank, and don't affect the closest-rank stat.
 
 ## Known trade-offs
 

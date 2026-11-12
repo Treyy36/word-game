@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>trey-texto — guess the secret word</title>
-  <meta name="description" content="Guess the secret word. Every guess is scored 0-100 by how close in meaning it is to the answer." />
+  <meta name="description" content="Guess the secret word. Every guess gets a rank — get as close to 1 as you can." />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://huggingface.co" crossorigin />
   <link rel="stylesheet" href="styles.css" />
@@ -15,7 +15,7 @@
   <main class="app">
     <header class="header">
       <h1 class="logo">trey-<span class="logo-dot">texto</span></h1>
-      <p class="tagline">Guess the secret word. The closer the meaning, the higher the score.</p>
+      <p class="tagline">Guess the secret word. Get as close to 1 as you can.</p>
     </header>
 
     <section class="hud" aria-label="Game stats">
@@ -24,8 +24,8 @@
         <span class="stat-label">Guesses</span>
       </div>
       <div class="stat">
-        <span class="stat-value" id="best-score">—</span>
-        <span class="stat-label">Best score</span>
+        <span class="stat-value" id="closest-rank">&mdash;</span>
+        <span class="stat-label">Closest</span>
       </div>
       <div class="stat">
         <span class="stat-value" id="answer-slots">??????</span>
@@ -50,10 +50,10 @@
 
     <p id="status" class="status" role="status" aria-live="polite"></p>
 
-    <ol id="guess-list" class="guess-list" aria-label="Your guesses, sorted by score"></ol>
+    <ol id="guess-list" class="guess-list" aria-label="Your guesses, sorted closest first"></ol>
 
     <footer class="footer">
-      <span class="hint">Closer meaning, higher score.</span>
+      <span class="hint">Lower number = closer meaning.</span>
     </footer>
   </main>
 
