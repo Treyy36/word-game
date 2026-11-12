@@ -219,7 +219,7 @@ body {
 .status[data-tone="error"] { color: #ff8a8a; }
 .status[data-tone="info"]  { color: #9cc0ff; }
 .status[data-tone="success"] { color: #58e39b; }
-.status[data-tone="hot"] { color: #ff9068; }
+.status[data-tone="close"] { color: #6fd98f; }
 
 /* Guess rows ------------------------------------------------------------- */
 
@@ -296,16 +296,9 @@ body {
   transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Closeness tiers -------------------------------------------------------- */
+/* Closeness colours are set per row in JS: green close, yellow middle, red far. */
 
-.guess-row.freezing { --tier: #3b82c4; }
-.guess-row.cold     { --tier: #2fa8d8; }
-.guess-row.cool     { --tier: #35c78f; }
-.guess-row.mild     { --tier: #d3b13a; }
-.guess-row.warm     { --tier: #f08a3c; }
-.guess-row.hot      { --tier: #f0554a; }
 .guess-row.solved   {
-  --tier: #35d07f;
   border-color: rgba(53, 208, 127, 0.5);
   box-shadow: 0 0 0 1px rgba(53, 208, 127, 0.18), 0 8px 32px -12px rgba(53, 208, 127, 0.6);
 }

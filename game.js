@@ -180,6 +180,20 @@ function closenessPercent(rank) {
   return Math.max(0, Math.min(100, Math.round(pct)));
 }
 
+/**
+ * Green when close, yellow in the middle, red when far off. Interpolated on a
+ * log scale so the colour shifts as smoothly as the bar does.
+ */
+function tierColor(rank) {
+  if (rank <= 1) return '#35d07f';
+
+  const closeness = Math.min(1, Math.max(0, 1 - Math.log10(rank) / Math.log10(BAR_MAX_RANK)));
+  const hue = Math.round(120 * closeness); // 120 = green, 60 = yellow, 0 = red
+  const lightness = Math.round(46 + 12 * (1 - closeness));
+
+  return `hsl(${hue} 68% ${lightness}%)`;
+}
+
 function tierOf(rank) {
   if (rank <= 1) return 'solved';
   if (rank <= 10) return 'hot';
@@ -191,12 +205,12 @@ function tierOf(rank) {
 }
 
 function tierMessage(rank) {
-  if (rank <= 10) return 'Scorching. You are basically there. 🔥';
-  if (rank <= 100) return 'Warm — same neighbourhood.';
-  if (rank <= 1000) return 'Cool. Related, but not yet.';
-  if (rank <= 10000) return 'Cold. Different area of meaning.';
-  if (rank <= 50000) return 'Freezing. Almost nothing in common. 🧊';
-  return 'Glacial. Try a completely different direction.';
+  if (rank <= 10) return 'Very close — you are basically there.';
+  if (rank <= 100) return 'Close. Same neighbourhood.';
+  if (rank <= 1000) return 'Same general area of meaning.';
+  if (rank <= 10000) return 'Far off — a different area of meaning.';
+  if (rank <= 50000) return 'Very far off.';
+  return 'Nothing in common. Try a completely different direction.';
 }
 
 /* -------------------------------------------------------------------------- */
@@ -367,6 +381,7 @@ function createRow(word, rank) {
   row.className = `guess-row ${tierOf(rank)}`;
   row.dataset.rank = String(rank);
   row.dataset.word = word;
+  row.style.setProperty('--tier', tierColor(rank));
 
   const wordEl = document.createElement('span');
   wordEl.className = 'guess-word';
@@ -463,7 +478,7 @@ function registerGuess(word, rank, message = null) {
   } else if (message) {
     setStatus(message, 'info');
   } else {
-    setStatus(tierMessage(rank), rank <= 100 ? 'hot' : 'muted');
+    setStatus(tierMessage(rank), rank <= 100 ? 'close' : 'muted');
   }
 }
 
