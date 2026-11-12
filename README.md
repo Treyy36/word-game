@@ -48,6 +48,8 @@ Pages rebuilds automatically in about 30 seconds. `.nojekyll` keeps Jekyll from 
 
 Only the exact answer can reach rank 1; every other guess starts at 2 or worse.
 
+Each new guess is **pinned to the top** of the board so it never gets lost, and the row it displaces drops back into rank order underneath. Repeat guesses don't add a row — they flash the existing one and echo its rank.
+
 ### What the rank actually is
 
 It is a **distance index**, not a literal position in a vocabulary. A real rank would mean "there are 3,472 words closer than this one", which requires embedding a whole word list up front — impractical in a browser (173k words through WASM would take tens of minutes). `similarityToRank()` instead maps similarity through `exp(RANK_K * (1 - closeness))`, which is monotonic and deterministic: the *ordering* is truthful, and the magnitudes are tuned to feel Contexto-like.

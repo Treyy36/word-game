@@ -254,6 +254,12 @@ body {
   animation: rowFlash 0.9s ease;
 }
 
+/* The newest guess is pinned on top until the next one arrives. */
+.guess-row.latest {
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 12px 34px -20px #000;
+}
+
 @keyframes rowFlash {
   0%, 100% { box-shadow: 0 0 0 0 rgba(91, 141, 255, 0); }
   25%      { box-shadow: 0 0 0 3px rgba(91, 141, 255, 0.5); }

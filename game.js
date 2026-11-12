@@ -317,6 +317,18 @@ function insertSorted(row, rank) {
   else ui.list.append(row);
 }
 
+/**
+ * Files the pinned row back into rank order. Called just before a new guess
+ * takes the top slot, so only ever one guess is pinned.
+ */
+function unpinPrevious() {
+  const previous = ui.list.querySelector('.guess-row.latest');
+  if (!previous) return;
+
+  previous.classList.remove('latest');
+  insertSorted(previous, Number(previous.dataset.rank));
+}
+
 /** A guess with no score, used for the easter eggs. */
 function createEggRow(word, message) {
   const row = document.createElement('li');
@@ -350,7 +362,12 @@ function registerGuess(word, rank) {
     ui.closestRank.classList.add('revealed');
   }
 
-  insertSorted(createRow(word, rank), rank);
+  // The newest guess stays pinned on top so it never gets buried in the list;
+  // the row it displaces drops back into rank order underneath.
+  unpinPrevious();
+  const row = createRow(word, rank);
+  row.classList.add('latest');
+  ui.list.prepend(row);
 
   ui.input.value = '';
   ui.input.focus();
@@ -368,6 +385,7 @@ function registerEgg(word, message) {
   guessTotal += 1;
   ui.guessCount.textContent = String(guessTotal);
 
+  unpinPrevious();
   ui.list.prepend(createEggRow(word, message));
 
   ui.input.value = '';
