@@ -139,7 +139,7 @@ Solving the riddle doesn't show a "you win" modal — it fades the board out and
 
 ```
 you won
-a dinner date
+a dinner double date
 answer.
 happy hour · see you there
 ```
