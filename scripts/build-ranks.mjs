@@ -11,6 +11,15 @@
  * first) intersected with the ENABLE dictionary (assets/words.txt) so we never
  * rank noise like "http" or "www". Only lowercase a-z runs of 2-20 letters.
  *
+ * One slot per base form. Without that, `answered`, `answers` and `answering`
+ * each eat a rank the game can never show — typing any of them collapses onto
+ * `answer` and wins at rank 1. Collapsing here means rank N always names a
+ * different word from rank N-1, so there are no gaps to fall into.
+ *
+ * TOP_WORDS then pins the first ranks by hand. Ranks 1-30 are the ones a player
+ * actually sees, so they are curated once and held fixed; everything below them
+ * is whatever the similarity ordering says.
+ *
  * Words are embedded one at a time on purpose. Batching changes the pooled
  * vector for short inputs, and the browser only ever embeds a single word, so
  * single encodes are the only ones that agree with production.
@@ -27,6 +36,7 @@ import { pipeline, env } from '@huggingface/transformers';
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { canonicalWord } from '../word-forms.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -39,6 +49,16 @@ const OUTPUT_FILE = path.join(ASSETS, 'ranks.txt');
 
 const ANSWER = (process.argv[2] || 'answer').trim().toLowerCase();
 const VOCAB_SIZE = Number(process.argv[3] || 10000);
+
+/**
+ * Ranks 1-30, pinned by hand. These are the numbers a player actually sees and
+ * talks about, so they are worth curating: every entry is a distinct base form
+ * the game will display, and none of them are an inflection of another entry.
+ * Leave this empty to let the similarity ordering decide everything.
+ *
+ * The first entry must be the answer.
+ */
+const TOP_WORDS = [];
 
 if (!/^[a-z]+$/.test(ANSWER)) {
   console.error(`Answer must be plain lowercase letters, got "${ANSWER}".`);
@@ -69,23 +89,62 @@ async function buildVocabulary() {
 
   for (const line of frequencyText.split('\n')) {
     const candidate = line.trim().toLowerCase().split(/\s+/)[0];
-    if (!candidate || seen.has(candidate)) continue;
+    if (!candidate) continue;
     if (!/^[a-z]{2,20}$/.test(candidate)) continue;
     if (!dictionary.has(candidate)) continue;
 
-    seen.add(candidate);
-    words.push(candidate);
+    const key = baseForm(candidate, dictionary);
+    if (key === null || seen.has(key)) continue;
+
+    seen.add(key);
+    words.push(key);
     if (words.length >= VOCAB_SIZE) break;
   }
 
   // The answer has to be in the vocabulary, or nothing can out-rank it.
-  if (!seen.has(ANSWER)) {
+  const answerKey = canonicalWord(ANSWER, dictionary);
+  if (!seen.has(answerKey)) {
     words.pop();
-    words.push(ANSWER);
-    console.log(`Added "${ANSWER}" to the vocabulary (it was not in the top ${VOCAB_SIZE}).`);
+    words.push(answerKey);
+    seen.add(answerKey);
+    console.log(`Added "${answerKey}" to the vocabulary (it was not in the top ${VOCAB_SIZE}).`);
   }
 
-  return words;
+  return { words, dictionary };
+}
+
+/**
+ * Reorders the similarity ranking so TOP_WORDS occupy ranks 1..N verbatim.
+ * Everything else keeps its relative order and slides in behind them.
+ */
+function applyPins(order, words, dictionary) {
+  if (TOP_WORDS.length === 0) return order;
+
+  const answerKey = canonicalWord(ANSWER, dictionary);
+  if (TOP_WORDS[0] !== answerKey) {
+    throw new Error(`TOP_WORDS must start with the answer ("${answerKey}"), got "${TOP_WORDS[0]}"`);
+  }
+
+  const indexOf = new Map(words.map((word, index) => [word, index]));
+  const pinned = new Set();
+
+  for (const word of TOP_WORDS) {
+    // These two checks are what actually guarantee "no dead slots": a pinned
+    // word must exist, and no two pinned words may be the same base form.
+    if (!words.includes(word)) {
+      throw new Error(`TOP_WORDS entry "${word}" is not in the vocabulary`);
+    }
+    if (canonicalWord(word, dictionary) !== word) {
+      throw new Error(`TOP_WORDS entry "${word}" is not a base form`);
+    }
+    if (pinned.has(word)) {
+      throw new Error(`TOP_WORDS repeats "${word}"`);
+    }
+    pinned.add(word);
+  }
+
+  const head = TOP_WORDS.map((word) => indexOf.get(word));
+  return [...head, ...order.filter((index) => !pinned.has(words[index]))];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -105,11 +164,30 @@ function normalize(vector) {
   return norm === 0 ? vector : vector.map((value) => value / norm);
 }
 
+/**
+ * canonicalWord() to a fixed point. One pass is not enough: `possessed` becomes
+ * `possess`, which then becomes `posses`, which collapses again to `posse`. The
+ * shipped table has to hold stable words, because that is exactly what lets the
+ * game map a guess onto a rank without ever missing.
+ *
+ * Returns null for words that never settle, so they are dropped rather than
+ * shipped in a state the game would score inconsistently.
+ */
+function baseForm(word, dictionary) {
+  let current = word;
+  for (let pass = 0; pass < 6; pass += 1) {
+    const next = canonicalWord(current, dictionary);
+    if (next === current) return current;
+    current = next;
+  }
+  return canonicalWord(current, dictionary) === current ? current : null;
+}
+
 async function main() {
   console.log(`Answer: "${ANSWER}" · vocabulary: ${VOCAB_SIZE} words`);
 
-  const words = await buildVocabulary();
-  console.log(`Vocabulary built: ${words.length} words`);
+  const { words, dictionary } = await buildVocabulary();
+  console.log(`Vocabulary built: ${words.length} distinct words (inflections collapsed)`);
 
   console.log('Loading model…');
   let extractor;
@@ -145,10 +223,34 @@ async function main() {
   }
   process.stdout.write('\n');
 
-  const order = Array.from(words.keys()).sort((a, b) => similarity[b] - similarity[a]);
+  const computed = Array.from(words.keys()).sort((a, b) => similarity[b] - similarity[a]);
+  const order = applyPins(computed, words, dictionary);
+
+  if (words[order[0]] !== canonicalWord(ANSWER, dictionary)) {
+    throw new Error(`Rank 1 came out as "${words[order[0]]}", not the answer.`);
+  }
+
+  // The whole point of collapsing inflections: if two ranks were the same base
+  // form, or an entry collapsed to something else, the game would rewrite one
+  // of them to rank 1 and leave a hole in the sequence. Fail the build instead.
+  const distinct = new Set(words);
+  if (distinct.size !== words.length) {
+    throw new Error('Duplicate base forms survived dedupe — dead ranks would come back.');
+  }
+  const unstable = order.filter((index) => canonicalWord(words[index], dictionary) !== words[index]);
+  if (unstable.length > 0) {
+    throw new Error(
+      `${unstable.length} entries are not stable base forms, e.g. "${words[unstable[0]]}"`,
+    );
+  }
+
+  console.log('\nClosest 30 by similarity alone:');
+  computed.slice(0, 30).forEach((index, rank) => {
+    console.log(`  ${String(rank + 1).padStart(2)}  ${words[index]}`);
+  });
 
   const lines = [
-    `#answer=${ANSWER} size=${words.length} model=${MODEL_ID} dtype=q8`,
+    `#answer=${ANSWER} size=${order.length} model=${MODEL_ID} dtype=q8`,
     // Line 1 is rank 1, so the rank is just the line number. The top entry is
     // pinned to a clean 1.000000 so float noise can never displace the answer.
     ...order.map((index, rank) =>
@@ -163,8 +265,13 @@ async function main() {
     return index < 0 ? null : order.indexOf(index) + 1;
   };
 
-  console.log(`\nWrote ${OUTPUT_FILE} (${words.length} rows)`);
-  console.log('Sample ranks:');
+  console.log(`\nWrote ${OUTPUT_FILE} (${order.length} rows)`);
+  console.log('\nFinal top 30:');
+  order.slice(0, 30).forEach((index, rank) => {
+    console.log(`  ${String(rank + 1).padStart(2)}  ${words[index]}`);
+  });
+
+  console.log('\nSample ranks:');
   for (const word of ['answer', 'question', 'reply', 'response', 'ask', 'dog', 'banana', 'pizza']) {
     const rank = rankOf(word);
     console.log(`  ${word.padEnd(10)} ${rank === null ? '(not in vocabulary)' : rank}`);

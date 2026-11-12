@@ -24,6 +24,8 @@
  *   - RANK_K:  curve steepness (higher = ranks climb faster with distance)
  */
 
+import { canonicalWord } from './word-forms.js';
+
 const MODEL_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
 const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 
@@ -206,10 +208,13 @@ function rankForSimilarity(similarity) {
   return low + 1;
 }
 
-/** The literal rank of a word we actually shipped a score for, else null. */
-function vocabularyRank(word, key) {
+/**
+ * The literal rank of a word we shipped a score for, else null. The table is
+ * keyed by canonical form, so inflections find their base word's slot.
+ */
+function vocabularyRank(key) {
   if (!rankTable) return null;
-  return rankTable.byWord.get(word) ?? rankTable.byWord.get(key) ?? null;
+  return rankTable.byWord.get(key) ?? null;
 }
 
 /**
@@ -218,7 +223,7 @@ function vocabularyRank(word, key) {
  * Falls back to the exponential curve if no table is loaded at all.
  */
 async function scoreWord(word, key) {
-  const exact = vocabularyRank(word, key);
+  const exact = vocabularyRank(key);
   if (exact !== null) return exact;
 
   const vector = await getVector(word);
@@ -289,11 +294,20 @@ function normalizeGuess(value) {
     .trim();
 }
 
-/** Returns an error message, or null when the guess is acceptable. */
+/**
+ * Returns an error message, or null when the guess is acceptable.
+ *
+ * A guess has to be one plain word. A hyphen means two words, and a dangling
+ * apostrophe or hyphen (`answer'`, `answer-`) slips past a loose pattern and
+ * reaches the model as a near-copy of the answer, scoring absurdly close.
+ */
 function checkFormat(word) {
   if (!word) return 'Type a word first.';
   if (/\s/.test(word)) return 'One word at a time.';
-  if (!/^[a-z][a-z' -]*$/.test(word)) return 'Letters, apostrophes and hyphens only.';
+  if (word.includes('-')) return 'One word at a time — no hyphens.';
+  if (!/^[a-z]+(?:'[a-z]+)?$/.test(word)) {
+    return 'Letters only, with at most one apostrophe in the middle.';
+  }
   if (word.length > 40) return 'That is too long.';
   return null;
 }
@@ -392,14 +406,11 @@ async function loadRankTable() {
 }
 
 /**
- * Real dictionary lookup when it loaded, heuristic otherwise. Contractions and
- * hyphenated words skip the lookup: word lists like ENABLE don't carry
- * apostrophes, and they are still a single word.
+ * Real dictionary lookup when it loaded, heuristic otherwise. Contractions skip
+ * the lookup — word lists like ENABLE don't carry apostrophes.
  */
 function isKnownWord(word) {
-  if (dictionary && !word.includes("'") && !word.includes('-')) {
-    return dictionary.has(word);
-  }
+  if (dictionary && !word.includes("'")) return dictionary.has(word);
   return looksLikeWord(word);
 }
 
@@ -432,50 +443,6 @@ function oneEditCandidates(word) {
   }
 
   return [...candidates].filter((candidate) => dictionary.has(candidate));
-}
-
-/** Ordered longest-first so "answers" tries "s" only after longer suffixes fail. */
-const INFLECTIONS = [
-  ['ies', 'y'],
-  ['ing', ''],
-  ['est', ''],
-  ['ed', ''],
-  ['es', ''],
-  ['s', ''],
-];
-
-/**
- * Collapses plurals and simple inflections onto their base word, so "answers"
- * and "answer" are one guess. It only strips when the result is itself in the
- * dictionary, which keeps "class" and "bus" intact.
- */
-function canonicalWord(word) {
-  if (!dictionary || word.length < 4 || word.includes("'") || word.includes('-')) {
-    return word;
-  }
-
-  for (const [suffix, replacement] of INFLECTIONS) {
-    if (!word.endsWith(suffix)) continue;
-
-    const stem = word.slice(0, -suffix.length);
-    if (stem.length < 3) continue;
-
-    const candidates = [];
-    if (replacement) candidates.push(stem + replacement);
-    candidates.push(stem);
-
-    // "stopped" -> "stopp" -> "stop"
-    if (stem.at(-1) === stem.at(-2)) candidates.push(stem.slice(0, -1));
-
-    // "hiding" -> "hid" -> "hide"
-    candidates.push(`${stem}e`);
-
-    for (const candidate of candidates) {
-      if (dictionary.has(candidate)) return candidate;
-    }
-  }
-
-  return word;
 }
 
 /**
@@ -607,7 +574,7 @@ function createEggRow(word, message) {
 /* -------------------------------------------------------------------------- */
 
 function registerGuess(word, rank, message = null) {
-  guesses.set(canonicalWord(word), { rank, word });
+  guesses.set(canonicalWord(word, dictionary), { rank, word });
   guessTotal += 1;
   ui.guessCount.textContent = String(guessTotal);
 
@@ -653,7 +620,7 @@ function reportRepeat(key, typed = null) {
 
 /** Easter eggs are counted but never ranked — they carry no rank. */
 function registerEgg(word, message) {
-  guesses.set(canonicalWord(word), { egg: message, word });
+  guesses.set(canonicalWord(word, dictionary), { egg: message, word });
   guessTotal += 1;
   ui.guessCount.textContent = String(guessTotal);
 
@@ -832,7 +799,7 @@ async function handleGuess(event) {
   }
 
   if (EASTER_EGGS.has(word)) {
-    const eggKey = canonicalWord(word);
+    const eggKey = canonicalWord(word, dictionary);
     if (guesses.has(eggKey)) reportRepeat(eggKey);
     else registerEgg(word, EASTER_EGGS.get(word));
     return;
@@ -859,7 +826,7 @@ async function handleGuess(event) {
 
     // "answers", "answered" and "answer" are one word, so they share a slot
     // in the guess list and any of them can solve it.
-    const key = canonicalWord(word);
+    const key = canonicalWord(word, dictionary);
 
     if (guesses.has(key)) {
       reportRepeat(key, typed);
@@ -874,8 +841,8 @@ async function handleGuess(event) {
     setStatus('Thinking…');
 
     // Only the answer, or an inflection of it, sits at rank 1.
-    const rank =
-      key === canonicalWord(ANSWER) ? 1 : Math.max(2, await scoreWord(word, key));
+    const answerKey = canonicalWord(ANSWER, dictionary);
+    const rank = key === answerKey ? 1 : Math.max(2, await scoreWord(word, key));
 
     registerGuess(
       word,
