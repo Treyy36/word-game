@@ -298,7 +298,7 @@ function showReveal() {
   if (revealed) return;
   revealed = true;
 
-  document.body.classList.add('revealed');
+  document.documentElement.classList.add('revealed');
   ui.reveal.hidden = false;
 
   // Two frames so the browser registers the hidden -> visible change first,
