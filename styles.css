@@ -697,7 +697,7 @@ html.revealed .app {
 
 .pick-label {
   display: block;
-  margin-bottom: 9px;
+  margin-bottom: 6px;
   font-size: 0.82rem;
   color: #c2cede;
 }
@@ -707,32 +707,10 @@ html.revealed .app {
   color: #6f7f93;
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.pick-items {
   margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.chip {
-  padding: 6px 13px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  border-radius: 999px;
-}
-
-.chip.dinner {
-  color: #ffcac4;
-  background: rgba(240, 85, 74, 0.14);
-  border: 1px solid rgba(240, 85, 74, 0.36);
-}
-
-.chip.hh {
-  color: #bff0d2;
-  background: rgba(53, 199, 143, 0.13);
-  border: 1px solid rgba(53, 199, 143, 0.36);
+  font-size: 0.95rem;
+  color: #e9eff8;
 }
 
 /* Weather */
