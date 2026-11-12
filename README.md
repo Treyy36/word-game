@@ -1,4 +1,4 @@
-# contexto-ish
+# trey-texto
 
 A small browser word game in the style of [Contexto](https://contexto.me): guess the secret word, and every guess is scored **0–100** by how close its *meaning* is to the answer. Pure HTML/CSS/JS — no build step, no server, no API keys.
 

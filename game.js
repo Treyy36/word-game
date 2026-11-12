@@ -1,5 +1,5 @@
 /**
- * contexto-ish — guess the secret word, scored by semantic closeness.
+ * trey-texto — guess the secret word, scored by semantic closeness.
  *
  * HOW THE SCORING WORKS
  * ---------------------
@@ -334,11 +334,9 @@ function formatClock(iso) {
   return `${hour12}:${minuteText} ${suffix}`;
 }
 
-function weatherTip(temp, rain) {
+function weatherTip(rain) {
   if (rain >= 40) return 'rain is likely — bring an umbrella.';
-  if (temp <= 50) return 'chilly out — bring a jacket.';
-  if (temp >= 78) return 'warm one — skip the extra layer.';
-  return 'mild evening — a light layer is plenty.';
+  return 'cool evening — perfect for a cardigan ;)';
 }
 
 function renderWeather(data) {
@@ -364,7 +362,7 @@ function renderWeather(data) {
       <li><span>rain</span><strong>${rain}%</strong></li>
       ${sunset ? `<li><span>sunset</span><strong>${formatClock(sunset)}</strong></li>` : ''}
     </ul>
-    <p class="weather-tip">${weatherTip(temp, rain)}</p>
+    <p class="weather-tip">${weatherTip(rain)}</p>
   `;
 }
 
