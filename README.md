@@ -130,11 +130,25 @@ That writes `assets/menu-1.png`, `assets/menu-2.png` and `assets/happy-hour-1.pn
 | `game.js` | Model loading, embeddings, scoring, game state, weather |
 | `scripts/pdf-to-images.py` | Renders the menu PDFs to PNGs for the itinerary |
 | `assets/answer.png` | Full-bleed backdrop for the reveal |
+| `assets/words.txt` | ENABLE word list used to reject misspellings |
 | `assets/*.pdf` | Source menus |
 | `assets/*.png` (menus) | Generated menu images used by the itinerary |
+
+## Easter eggs
+
+Guesses listed in `EASTER_EGGS` skip scoring entirely and show a note instead of a number:
+
+```js
+const EASTER_EGGS = new Map([
+  ['trey', 'cool guy'],
+  ['harper', 'Princess'],
+]);
+```
+
+They are checked before word validation, so they work even for names that aren't in the dictionary. Egg rows are prepended to the board, carry no score, and don't affect the best-score stat.
 
 ## Known trade-offs
 
 - **`all-MiniLM-L6-v2` is a sentence model.** It captures *association* more than strict synonymy, so `question` scores above `reply` for the answer `answer`. I benchmarked `bge-small-en-v1.5` too — it had a higher noise floor (`~0.55` for unrelated words) and a narrower spread, so MiniLM gives a better game curve.
-- **Word validation is a heuristic.** It filters keyboard mashing (`zzzz`) but won't catch every non-word; junk that slips through simply scores ~0. Swap `looksLikeWord()` for a `Set` lookup if you bundle a dictionary. (The free Datamuse API can't be used here — it sends no CORS headers, so browsers block it.)
+- **Word validation uses a bundled dictionary.** `assets/words.txt` is the ENABLE word list (~173k entries), fetched once in parallel with the model. Guesses must appear in it exactly, and multi-word guesses are rejected. If the file fails to load, `looksLikeWord()` takes over as a permissive fallback so the game is not blocked. (The free Datamuse API can't be used here — it sends no CORS headers, so browsers block it.)
 - **No rank number.** Contexto shows a rank against a fixed vocabulary (~100k words). Doing that here means embedding the whole vocabulary once, which is a much heavier job. Showing a 0–100 score avoids shipping a word list.

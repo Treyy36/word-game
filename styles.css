@@ -294,6 +294,23 @@ body {
   box-shadow: 0 0 0 1px rgba(53, 208, 127, 0.18), 0 8px 32px -12px rgba(53, 208, 127, 0.6);
 }
 
+/* Easter eggs: no bar, no score, just a note. */
+.guess-row.egg {
+  padding: 12px 16px;
+  border-color: rgba(201, 179, 255, 0.34);
+  background: linear-gradient(
+    180deg,
+    rgba(160, 107, 255, 0.16),
+    rgba(91, 141, 255, 0.05)
+  );
+}
+
+.guess-egg {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #c9b3ff;
+}
+
 /* Footer ----------------------------------------------------------------- */
 
 .footer {

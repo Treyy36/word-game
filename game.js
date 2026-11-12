@@ -23,11 +23,19 @@
 const MODEL_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
 const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 
+/** ENABLE word list (~173k words), served from assets/ and loaded once. */
+const DICTIONARY_URL = 'assets/words.txt';
+const DICTIONARY_TIMEOUT_MS = 20000;
+
 const SIM_FLOOR = 0.3;
 const SIM_CEIL = 0.95;
 const SIM_GAMMA = 1.0;
 
-const MAX_WORDS = 3;
+/** Guesses that get a note instead of a score. Checked before any validation. */
+const EASTER_EGGS = new Map([
+  ['trey', 'cool guy'],
+  ['harper', 'Princess'],
+]);
 
 /** The secret word. Hard-coded as requested; `?word=foo` overrides it for testing. */
 const params = new URLSearchParams(location.search);
@@ -67,6 +75,9 @@ let answerVector = null;
 
 const vectorCache = new Map();
 const guessedWords = new Set();
+
+/** Populated by loadDictionary(); null means fall back to the heuristic. */
+let dictionary = null;
 
 let guessTotal = 0;
 let best = 0;
@@ -183,16 +194,53 @@ function normalizeGuess(value) {
 /** Returns an error message, or null when the guess is acceptable. */
 function checkFormat(word) {
   if (!word) return 'Type a word first.';
+  if (/\s/.test(word)) return 'One word at a time.';
   if (!/^[a-z][a-z' -]*$/.test(word)) return 'Letters, apostrophes and hyphens only.';
-  if (word.split(' ').length > MAX_WORDS) return `Keep it to ${MAX_WORDS} words or fewer.`;
   if (word.length > 40) return 'That is too long.';
   return null;
 }
 
+/** Loads the word list so misspellings can be rejected. Safe to call once. */
+async function loadDictionary() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DICTIONARY_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(DICTIONARY_URL, { signal: controller.signal });
+    if (!response.ok) throw new Error(`dictionary request failed: ${response.status}`);
+
+    const text = await response.text();
+    dictionary = new Set(
+      text
+        .split('\n')
+        .map((entry) => entry.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    console.info(`Dictionary loaded: ${dictionary.size} words.`);
+  } catch (error) {
+    // Never block the game on this — fall back to the heuristic below.
+    console.warn('Dictionary unavailable, falling back to heuristic word check.', error);
+    dictionary = null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
- * Cheap offline sanity check that filters keyboard mashing ("asdf", "zzzzqwt")
- * without rejecting real-but-uncommon words. To use a real dictionary instead,
- * swap the body of this function for a Set lookup — the caller stays the same.
+ * Real dictionary lookup when it loaded, heuristic otherwise. Contractions and
+ * hyphenated words skip the lookup: word lists like ENABLE don't carry
+ * apostrophes, and they are still a single word.
+ */
+function isKnownWord(word) {
+  if (dictionary && !word.includes("'") && !word.includes('-')) {
+    return dictionary.has(word);
+  }
+  return looksLikeWord(word);
+}
+
+/**
+ * Cheap fallback that filters keyboard mashing ("asdf", "zzzzqwt") if the
+ * dictionary fails to download.
  */
 function looksLikeWord(word) {
   const letters = word.replace(/[^a-z]/g, '');
@@ -251,6 +299,23 @@ function insertSorted(row, score) {
   else ui.list.append(row);
 }
 
+/** A guess with no score, used for the easter eggs. */
+function createEggRow(word, message) {
+  const row = document.createElement('li');
+  row.className = 'guess-row egg';
+
+  const wordEl = document.createElement('span');
+  wordEl.className = 'guess-word';
+  wordEl.textContent = word;
+
+  const messageEl = document.createElement('span');
+  messageEl.className = 'guess-egg';
+  messageEl.textContent = message;
+
+  row.append(wordEl, messageEl);
+  return row;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Game flow                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -276,6 +341,19 @@ function registerGuess(word, score) {
   } else {
     setStatus(tierMessage(score), score >= 60 ? 'hot' : 'muted');
   }
+}
+
+/** Easter eggs are counted but never ranked — they carry no score. */
+function registerEgg(word, message) {
+  guessedWords.add(word);
+  guessTotal += 1;
+  ui.guessCount.textContent = String(guessTotal);
+
+  ui.list.prepend(createEggRow(word, message));
+
+  ui.input.value = '';
+  ui.input.focus();
+  setStatus('');
 }
 
 function revealAnswer() {
@@ -439,8 +517,13 @@ async function handleGuess(event) {
     return;
   }
 
-  if (!looksLikeWord(word)) {
-    setStatus(`“${word}” does not look like a word. Try a real one.`, 'error');
+  if (EASTER_EGGS.has(word)) {
+    registerEgg(word, EASTER_EGGS.get(word));
+    return;
+  }
+
+  if (!isKnownWord(word)) {
+    setStatus(`“${word}” isn't a word — check the spelling.`, 'error');
     ui.input.select();
     return;
   }
@@ -490,17 +573,21 @@ async function start() {
     else if (!ui.plan.hidden) closePlan();
   });
 
+  // Starts downloading immediately; awaited before the input unlocks.
+  const dictionaryLoad = loadDictionary();
+
   try {
     extractor = await createExtractor();
     ui.loaderText.textContent = 'Encoding the secret word…';
     answerVector = await getVector(ANSWER);
+    await dictionaryLoad;
 
     ui.loader.hidden = true;
     ui.input.disabled = false;
     ui.button.disabled = false;
     ui.input.focus();
 
-    setStatus(`${ANSWER.length} letters. Start guessing — meaning counts, not spelling.`);
+    setStatus(`${ANSWER.length} letters. Start guessing.`);
   } catch (error) {
     console.error(error);
     ui.loader.hidden = true;
