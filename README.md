@@ -17,6 +17,18 @@ Any static server works — `npx serve`, `npx http-server`, VS Code Live Server,
 
 The first load downloads a ~25 MB language model; after that the browser caches it and startup is instant.
 
+## Deploying
+
+Live on GitHub Pages: **https://treyy36.github.io/word-game/**
+
+Everything is static and every path is relative, so it works from a repo subpath with no build step. To redeploy after a change:
+
+```bash
+git add -A && git commit -m "..." && git push
+```
+
+Pages rebuilds automatically in about 30 seconds. `.nojekyll` keeps Jekyll from touching the files.
+
 ## How the scoring works
 
 1. The answer and each guess are embedded into a 384-dimension "meaning vector" using [`all-MiniLM-L6-v2`](https://huggingface.co/Xenova/all-MiniLM-L6-v2) running locally via [Transformers.js](https://huggingface.co/docs/transformers.js) (ONNX Runtime, WASM backend).
