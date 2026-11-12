@@ -25,6 +25,8 @@ const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 
 /** ENABLE word list (~173k words), served from assets/ and loaded once. */
 const DICTIONARY_URL = 'assets/words.txt';
+/** Frequency-ordered words, used to pick the likely intent behind a typo. */
+const FREQUENCY_URL = 'assets/word-frequency.txt';
 const DICTIONARY_TIMEOUT_MS = 20000;
 
 /**
@@ -85,8 +87,10 @@ const vectorCache = new Map();
 /** word -> { rank } for scored guesses, { egg } for easter eggs. */
 const guesses = new Map();
 
-/** Populated by loadDictionary(); null means fall back to the heuristic. */
+/** Populated by loadWordLists(); null means fall back to the heuristic. */
 let dictionary = null;
+/** word -> position in the frequency list (0 = most common). */
+let frequencyRank = null;
 
 let guessTotal = 0;
 let bestRank = Number.POSITIVE_INFINITY;
@@ -216,27 +220,48 @@ function checkFormat(word) {
   return null;
 }
 
-/** Loads the word list so misspellings can be rejected. Safe to call once. */
-async function loadDictionary() {
+/** Loads the dictionary and the frequency list. Safe to call once. */
+async function loadWordLists() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DICTIONARY_TIMEOUT_MS);
 
   try {
-    const response = await fetch(DICTIONARY_URL, { signal: controller.signal });
-    if (!response.ok) throw new Error(`dictionary request failed: ${response.status}`);
+    const [dictionaryResponse, frequencyResponse] = await Promise.all([
+      fetch(DICTIONARY_URL, { signal: controller.signal }),
+      fetch(FREQUENCY_URL, { signal: controller.signal }),
+    ]);
 
-    const text = await response.text();
+    if (!dictionaryResponse.ok) {
+      throw new Error(`dictionary request failed: ${dictionaryResponse.status}`);
+    }
+
+    const dictionaryText = await dictionaryResponse.text();
     dictionary = new Set(
-      text
+      dictionaryText
         .split('\n')
         .map((entry) => entry.trim().toLowerCase())
         .filter(Boolean),
     );
-    console.info(`Dictionary loaded: ${dictionary.size} words.`);
+
+    if (frequencyResponse.ok) {
+      const frequencyText = await frequencyResponse.text();
+      frequencyRank = new Map();
+      frequencyText.split('\n').forEach((line, index) => {
+        const entry = line.trim().toLowerCase().split(/\s+/)[0];
+        if (entry && /^[a-z]+$/.test(entry) && !frequencyRank.has(entry)) {
+          frequencyRank.set(entry, index);
+        }
+      });
+    }
+
+    console.info(
+      `Word lists loaded: ${dictionary.size} words, ${frequencyRank?.size ?? 0} ranked.`,
+    );
   } catch (error) {
     // Never block the game on this — fall back to the heuristic below.
-    console.warn('Dictionary unavailable, falling back to heuristic word check.', error);
+    console.warn('Word lists unavailable, falling back to heuristic word check.', error);
     dictionary = null;
+    frequencyRank = null;
   } finally {
     clearTimeout(timer);
   }
@@ -252,6 +277,67 @@ function isKnownWord(word) {
     return dictionary.has(word);
   }
   return looksLikeWord(word);
+}
+
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
+
+/** Every real word one edit away from `word` (insert/delete/swap/substitute). */
+function oneEditCandidates(word) {
+  const candidates = new Set();
+
+  for (let i = 0; i < word.length; i += 1) {
+    candidates.add(word.slice(0, i) + word.slice(i + 1));
+  }
+
+  for (let i = 0; i < word.length - 1; i += 1) {
+    candidates.add(word.slice(0, i) + word[i + 1] + word[i] + word.slice(i + 2));
+  }
+
+  for (let i = 0; i < word.length; i += 1) {
+    for (const letter of ALPHABET) {
+      if (letter !== word[i]) {
+        candidates.add(word.slice(0, i) + letter + word.slice(i + 1));
+      }
+    }
+  }
+
+  for (let i = 0; i <= word.length; i += 1) {
+    for (const letter of ALPHABET) {
+      candidates.add(word.slice(0, i) + letter + word.slice(i));
+    }
+  }
+
+  return [...candidates].filter((candidate) => dictionary.has(candidate));
+}
+
+/**
+ * Suggests the intended word for a typo. One-edit candidates are ranked by how
+ * common they are — without that, "answe" is just as plausible as "ansae".
+ * Returns null when nothing stands out, so the guess is rejected instead.
+ */
+function findCorrection(word) {
+  if (!dictionary) return null;
+
+  const candidates = oneEditCandidates(word);
+  if (candidates.length === 0) return null;
+
+  if (frequencyRank) {
+    let best = null;
+    let bestRank = Infinity;
+
+    for (const candidate of candidates) {
+      const rank = frequencyRank.get(candidate);
+      if (rank !== undefined && rank < bestRank) {
+        bestRank = rank;
+        best = candidate;
+      }
+    }
+
+    if (best) return best;
+  }
+
+  // Only one possible word and it is uncommon — still a safe bet.
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 /**
@@ -351,7 +437,7 @@ function createEggRow(word, message) {
 /* Game flow                                                                  */
 /* -------------------------------------------------------------------------- */
 
-function registerGuess(word, rank) {
+function registerGuess(word, rank, message = null) {
   guesses.set(word, { rank });
   guessTotal += 1;
   ui.guessCount.textContent = String(guessTotal);
@@ -374,9 +460,21 @@ function registerGuess(word, rank) {
 
   if (word === ANSWER) {
     finish();
+  } else if (message) {
+    setStatus(message, 'info');
   } else {
     setStatus(tierMessage(rank), rank <= 100 ? 'hot' : 'muted');
   }
+}
+
+/** Echoes what a repeated guess already scored and points at its row. */
+function reportRepeat(word) {
+  const previous = guesses.get(word);
+  const detail = previous.egg ? previous.egg : `rank ${previous.rank}`;
+  setStatus(`You already guessed “${word}” — ${detail}.`, 'info');
+  flashRow(word);
+  ui.input.value = '';
+  ui.input.focus();
 }
 
 /** Easter eggs are counted but never ranked — they carry no rank. */
@@ -550,7 +648,7 @@ async function handleGuess(event) {
   event.preventDefault();
   if (gameOver || busy || !answerVector) return;
 
-  const word = normalizeGuess(ui.input.value);
+  let word = normalizeGuess(ui.input.value);
 
   const formatProblem = checkFormat(word);
   if (formatProblem) {
@@ -560,12 +658,7 @@ async function handleGuess(event) {
   }
 
   if (guesses.has(word)) {
-    const previous = guesses.get(word);
-    const detail = previous.egg ? previous.egg : `rank ${previous.rank}`;
-    setStatus(`You already guessed “${word}” — ${detail}.`, 'info');
-    flashRow(word);
-    ui.input.value = '';
-    ui.input.focus();
+    reportRepeat(word);
     return;
   }
 
@@ -574,16 +667,38 @@ async function handleGuess(event) {
     return;
   }
 
-  if (!isKnownWord(word)) {
-    setStatus(`“${word}” isn't a word — check the spelling.`, 'error');
-    ui.input.select();
-    return;
-  }
-
   busy = true;
   ui.button.disabled = true;
 
   try {
+    let typed = null;
+
+    if (!isKnownWord(word)) {
+      const correction = findCorrection(word);
+
+      if (!correction) {
+        setStatus(`“${word}” isn't a word — check the spelling.`, 'error');
+        ui.input.select();
+        return;
+      }
+
+      typed = word;
+      word = correction;
+
+      if (guesses.has(word)) {
+        setStatus(`“${typed}” → “${word}” — already guessed.`, 'info');
+        flashRow(word);
+        ui.input.value = '';
+        ui.input.focus();
+        return;
+      }
+
+      if (EASTER_EGGS.has(word)) {
+        registerEgg(word, EASTER_EGGS.get(word));
+        return;
+      }
+    }
+
     setStatus('Thinking…');
 
     const vector = await getVector(word);
@@ -591,7 +706,11 @@ async function handleGuess(event) {
     // Only the exact answer can sit at rank 1.
     const rank = word === ANSWER ? 1 : Math.max(2, similarityToRank(similarity));
 
-    registerGuess(word, rank);
+    registerGuess(
+      word,
+      rank,
+      typed ? `“${typed}” → “${word}” · ${tierMessage(rank)}` : null,
+    );
   } catch (error) {
     console.error(error);
     setStatus('Something went wrong scoring that word. Try again.', 'error');
@@ -626,13 +745,13 @@ async function start() {
   });
 
   // Starts downloading immediately; awaited before the input unlocks.
-  const dictionaryLoad = loadDictionary();
+  const wordListsLoad = loadWordLists();
 
   try {
     extractor = await createExtractor();
     ui.loaderText.textContent = 'Encoding the secret word…';
     answerVector = await getVector(ANSWER);
-    await dictionaryLoad;
+    await wordListsLoad;
 
     ui.loader.hidden = true;
     ui.input.disabled = false;
