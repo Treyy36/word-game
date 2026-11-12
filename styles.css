@@ -1,0 +1,535 @@
+/* ==========================================================================
+   contexto-ish — dark, minimal, guess-the-word board
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: dark;
+
+  --bg: #070a0f;
+  --text: #e9eff8;
+  --muted: #8695a8;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  --accent: #5b8dff;
+  --accent-2: #a06bff;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+
+  /* per-row closeness colour, overridden by tier classes */
+  --tier: #64748b;
+
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* Ambient glow ------------------------------------------------------------ */
+
+.bg-glow {
+  position: fixed;
+  inset: -30vmax;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38vmax 38vmax at 22% 18%, rgba(91, 141, 255, 0.22), transparent 62%),
+    radial-gradient(34vmax 34vmax at 82% 12%, rgba(160, 107, 255, 0.16), transparent 60%),
+    radial-gradient(44vmax 44vmax at 50% 108%, rgba(35, 208, 140, 0.12), transparent 62%);
+  filter: blur(18px);
+  animation: drift 24s ease-in-out infinite alternate;
+}
+
+@keyframes drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to   { transform: translate3d(2%, 2%, 0) scale(1.08); }
+}
+
+/* Layout ----------------------------------------------------------------- */
+
+.app {
+  position: relative;
+  z-index: 1;
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 44px 20px 88px;
+}
+
+/* Header ----------------------------------------------------------------- */
+
+.header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.logo {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 2.9rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  background: linear-gradient(120deg, #ffffff 20%, #9cc0ff 55%, #c3a4ff 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.logo-dot {
+  color: #5b8dff;
+  -webkit-text-fill-color: #5b8dff;
+}
+
+.tagline {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+/* Stats ------------------------------------------------------------------ */
+
+.hud {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  transition: color 0.25s ease;
+}
+
+.stat-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.stat-value.revealed {
+  color: #35d07f;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 22px rgba(53, 208, 127, 0.45);
+}
+
+/* Guess form ------------------------------------------------------------- */
+
+.guess-form {
+  display: flex;
+  gap: 10px;
+}
+
+.guess-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 15px 18px;
+  font: inherit;
+  font-size: 1.05rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.guess-input::placeholder {
+  color: #66748a;
+}
+
+.guess-input:focus {
+  border-color: rgba(91, 141, 255, 0.75);
+  background: rgba(91, 141, 255, 0.07);
+  box-shadow: 0 0 0 4px rgba(91, 141, 255, 0.14);
+}
+
+.guess-input:disabled {
+  opacity: 0.55;
+}
+
+.guess-button {
+  flex: 0 0 auto;
+  padding: 15px 26px;
+  font: inherit;
+  font-weight: 650;
+  color: #08111f;
+  background: linear-gradient(135deg, #a9c8ff, #5b8dff 45%, #a06bff);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.18s ease, opacity 0.18s ease;
+}
+
+.guess-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.guess-button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+.guess-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Status ----------------------------------------------------------------- */
+
+.status {
+  min-height: 1.4em;
+  margin: 12px 2px 16px;
+  font-size: 0.88rem;
+  color: var(--muted);
+  transition: color 0.2s ease;
+}
+
+.status[data-tone="error"] { color: #ff8a8a; }
+.status[data-tone="info"]  { color: #9cc0ff; }
+.status[data-tone="success"] { color: #58e39b; }
+.status[data-tone="hot"] { color: #ff9068; }
+
+/* Guess rows ------------------------------------------------------------- */
+
+.guess-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guess-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding: 12px 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  animation: rowIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(-7px) scale(0.99); }
+  to   { opacity: 1; transform: none; }
+}
+
+.guess-word {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+.guess-score {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--tier);
+  transition: color 0.3s ease;
+}
+
+.guess-bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.guess-bar-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tier);
+  box-shadow: 0 0 14px -2px var(--tier);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Closeness tiers -------------------------------------------------------- */
+
+.guess-row.freezing { --tier: #3b82c4; }
+.guess-row.cold     { --tier: #2fa8d8; }
+.guess-row.cool     { --tier: #35c78f; }
+.guess-row.mild     { --tier: #d3b13a; }
+.guess-row.warm     { --tier: #f08a3c; }
+.guess-row.hot      { --tier: #f0554a; }
+.guess-row.solved   {
+  --tier: #35d07f;
+  border-color: rgba(53, 208, 127, 0.5);
+  box-shadow: 0 0 0 1px rgba(53, 208, 127, 0.18), 0 8px 32px -12px rgba(53, 208, 127, 0.6);
+}
+
+/* Footer ----------------------------------------------------------------- */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #5f6c80;
+  text-align: center;
+}
+
+/* Loader overlay --------------------------------------------------------- */
+
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 10, 15, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.loader[hidden] {
+  display: none;
+}
+
+.loader-card {
+  width: min(420px, 100%);
+  padding: 26px 24px;
+  text-align: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: #0f151d;
+  box-shadow: 0 30px 90px -30px #000;
+}
+
+.loader-title {
+  font-size: 1.05rem;
+  font-weight: 650;
+  margin-bottom: 16px;
+}
+
+.loader-track {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.loader-bar {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #5b8dff, #a06bff);
+  transition: width 0.25s ease;
+}
+
+.loader-text {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: #9cc0ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.loader-note {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: #5f6c80;
+}
+
+/* Reveal scene ----------------------------------------------------------- */
+
+/* The board recedes as the reveal fades in over it. */
+body.revealed .app {
+  filter: blur(6px);
+  opacity: 0.18;
+  transform: scale(0.985);
+  pointer-events: none;
+  transition: filter 1s ease, opacity 1s ease,
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 32px 24px;
+  text-align: center;
+  background: #05080c;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.reveal[hidden] {
+  display: none;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+}
+
+/* The venue photo, full-bleed, with a slow drift as it appears. */
+.reveal-photo {
+  position: absolute;
+  inset: 0;
+  background: #05080c url("assets/answer.png") center / cover no-repeat;
+  transform: scale(1.09);
+  transition: transform 11s ease-out;
+}
+
+.reveal.is-visible .reveal-photo {
+  transform: scale(1);
+}
+
+/* Scrim so the type stays legible over a bright interior shot. */
+.reveal-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(58% 54% at 50% 46%, rgba(4, 7, 10, 0.18), rgba(4, 7, 10, 0.62) 82%),
+    linear-gradient(180deg, rgba(4, 7, 10, 0.60) 0%, rgba(4, 7, 10, 0.16) 45%, rgba(4, 7, 10, 0.78) 100%);
+}
+
+.reveal-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(560px, 100%);
+}
+
+/* Children drift in one after another. */
+.reveal-inner > * {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal.is-visible .reveal-inner > * {
+  opacity: 1;
+  transform: none;
+}
+
+.reveal.is-visible .reveal-inner > *:nth-child(1) { transition-delay: 0.15s; }
+.reveal.is-visible .reveal-inner > *:nth-child(2) { transition-delay: 0.55s; }
+.reveal.is-visible .reveal-inner > *:nth-child(3) { transition-delay: 0.95s; }
+.reveal.is-visible .reveal-inner > *:nth-child(4) { transition-delay: 1.15s; }
+.reveal.is-visible .reveal-inner > *:nth-child(5) { transition-delay: 1.5s; }
+
+.reveal-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: #c8d4e4;
+  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.85);
+}
+
+.reveal-title {
+  margin: 0.3em 0 0.1em;
+  font-size: clamp(2.2rem, 8.5vw, 3.4rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  color: #ffffff;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.7);
+}
+
+.reveal-rule {
+  width: 46px;
+  height: 1px;
+  margin: 1.1em 0 1.2em;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+}
+
+.reveal-place {
+  margin: 0 0 0.55em;
+  font-size: clamp(1.6rem, 5.5vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.75);
+}
+
+.reveal-sub {
+  margin: 0;
+  font-size: clamp(0.95rem, 2.6vw, 1.1rem);
+  letter-spacing: 0.08em;
+  color: #d5dfec;
+  text-shadow: 0 1px 20px rgba(0, 0, 0, 0.9);
+}
+
+.reveal-dot {
+  margin: 0 0.45em;
+  color: #a9c8ff;
+}
+
+/* The trailing period in "answer." should sit tight against the word. */
+.reveal-place .reveal-dot {
+  margin: 0;
+}
+
+/* Small screens ---------------------------------------------------------- */
+
+@media (max-width: 520px) {
+  .app { padding-top: 30px; }
+  .guess-form { flex-wrap: wrap; }
+  .guess-button { flex: 1 1 100%; }
+  .stat-value { font-size: 1rem; }
+}
+
+/* Reduced motion --------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

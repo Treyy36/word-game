@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contexto — guess the secret word</title>
+  <meta name="description" content="Guess the secret word. Every guess is scored 0-100 by how close in meaning it is to the answer." />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://huggingface.co" crossorigin />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <main class="app">
+    <header class="header">
+      <h1 class="logo">context<span class="logo-dot">o</span></h1>
+      <p class="tagline">Guess the secret word. The closer the meaning, the higher the score.</p>
+    </header>
+
+    <section class="hud" aria-label="Game stats">
+      <div class="stat">
+        <span class="stat-value" id="guess-count">0</span>
+        <span class="stat-label">Guesses</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="best-score">—</span>
+        <span class="stat-label">Best score</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="answer-slots">??????</span>
+        <span class="stat-label">Answer</span>
+      </div>
+    </section>
+
+    <form id="guess-form" class="guess-form" autocomplete="off">
+      <input
+        id="guess-input"
+        class="guess-input"
+        type="text"
+        placeholder="Type a word…"
+        aria-label="Your guess"
+        autocapitalize="none"
+        autocorrect="off"
+        spellcheck="false"
+        disabled
+      />
+      <button id="guess-button" class="guess-button" type="submit" disabled>Guess</button>
+    </form>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <ol id="guess-list" class="guess-list" aria-label="Your guesses, sorted by score"></ol>
+
+    <footer class="footer">
+      <span class="hint">Scored by meaning, not spelling.</span>
+    </footer>
+  </main>
+
+  <div id="loader" class="loader" role="status" aria-live="polite">
+    <div class="loader-card">
+      <div class="loader-title">Warming up the brain 🧠</div>
+      <div class="loader-track"><div id="loader-bar" class="loader-bar"></div></div>
+      <div id="loader-text" class="loader-text">Loading language model…</div>
+      <div class="loader-note">~25 MB, downloaded once and cached by your browser.</div>
+    </div>
+  </div>
+
+  <div id="reveal" class="reveal" role="dialog" aria-modal="true" aria-label="You won a dinner date" hidden>
+    <div class="reveal-photo" aria-hidden="true"></div>
+    <div class="reveal-shade" aria-hidden="true"></div>
+    <div class="reveal-inner">
+      <p class="reveal-kicker">you won</p>
+      <h2 class="reveal-title">a dinner date</h2>
+      <div class="reveal-rule" aria-hidden="true"></div>
+      <p class="reveal-place">answer<span class="reveal-dot">.</span></p>
+      <p class="reveal-sub">happy hour <span class="reveal-dot">&middot;</span> see you there</p>
+    </div>
+  </div>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>
