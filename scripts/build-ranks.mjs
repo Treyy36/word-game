@@ -16,9 +16,9 @@
  * `answer` and wins at rank 1. Collapsing here means rank N always names a
  * different word from rank N-1, so there are no gaps to fall into.
  *
- * TOP_WORDS then pins the first ranks by hand. Ranks 1-30 are the ones a player
- * actually sees, so they are curated once and held fixed; everything below them
- * is whatever the similarity ordering says.
+ * TOP_WORD_PINS then pins the first ranks by hand, per answer. Ranks 1-30 are
+ * the ones a player actually sees, so they are curated once and held fixed;
+ * everything below them is whatever the similarity ordering says.
  *
  * Words are embedded one at a time on purpose. Batching changes the pooled
  * vector for short inputs, and the browser only ever embeds a single word, so
@@ -51,14 +51,50 @@ const ANSWER = (process.argv[2] || 'answer').trim().toLowerCase();
 const VOCAB_SIZE = Number(process.argv[3] || 10000);
 
 /**
- * Ranks 1-30, pinned by hand. These are the numbers a player actually sees and
- * talks about, so they are worth curating: every entry is a distinct base form
- * the game will display, and none of them are an inflection of another entry.
- * Leave this empty to let the similarity ordering decide everything.
+ * Ranks 1-30, pinned by hand, keyed by answer. These are the numbers a player
+ * actually sees and talks about, so they are worth curating: every entry is a
+ * distinct base form the game will display, and none of them are an inflection
+ * of another entry. An answer with no entry here keeps the similarity ordering
+ * for its top ranks.
  *
  * The first entry must be the answer.
  */
-const TOP_WORDS = [];
+const TOP_WORD_PINS = {
+  tulip: [
+    'tulip',
+    'flower',
+    'bloom',
+    'blossom',
+    'petal',
+    'rose',
+    'bouquet',
+    'lily',
+    'daisy',
+    'orchid',
+    'vase',
+    'stem',
+    'bulb',
+    'leaf',
+    'garden',
+    'spring',
+    'plant',
+    'nectar',
+    'scent',
+    'fragrant',
+    'delicate',
+    'beauty',
+    'pretty',
+    'lovely',
+    'sweet',
+    'romantic',
+    'pink',
+    'yellow',
+    'colorful',
+    'blush',
+  ],
+};
+
+const TOP_WORDS = TOP_WORD_PINS[ANSWER] ?? [];
 
 if (!/^[a-z]+$/.test(ANSWER)) {
   console.error(`Answer must be plain lowercase letters, got "${ANSWER}".`);

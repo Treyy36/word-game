@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="A bouquet of tulips wrapped in paper">
+  <title>A bouquet of tulips</title>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#221530" />
+      <stop offset="0.5" stop-color="#120d18" />
+      <stop offset="1" stop-color="#07090d" />
+    </linearGradient>
+
+    <radialGradient id="glow" cx="50%" cy="42%" r="52%">
+      <stop offset="0" stop-color="#ff9db0" stop-opacity="0.20" />
+      <stop offset="0.6" stop-color="#ff7f9a" stop-opacity="0.06" />
+      <stop offset="1" stop-color="#ff7f9a" stop-opacity="0" />
+    </radialGradient>
+
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3e6d4" />
+      <stop offset="0.45" stop-color="#e7d4bd" />
+      <stop offset="1" stop-color="#cdb59b" />
+    </linearGradient>
+
+    <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d4576f" />
+      <stop offset="1" stop-color="#a5324b" />
+    </linearGradient>
+
+    <linearGradient id="stem" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5c9a5d" />
+      <stop offset="1" stop-color="#2f6440" />
+    </linearGradient>
+
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4e8a55" />
+      <stop offset="1" stop-color="#2a5c3a" />
+    </linearGradient>
+
+    <!-- One tulip bloom: three teardrop petals fanned into a cup. -->
+    <g id="bloom">
+      <path
+        d="M0 0C-34-26-40-78-14-112-2-126 2-126 14-112 40-78 34-26 0 0Z"
+        fill="currentColor"
+        opacity="0.78"
+        transform="translate(-17 2) rotate(-24)"
+      />
+      <path
+        d="M0 0C-34-26-40-78-14-112-2-126 2-126 14-112 40-78 34-26 0 0Z"
+        fill="currentColor"
+        opacity="0.78"
+        transform="translate(17 2) rotate(24)"
+      />
+      <path
+        d="M0 0C-34-26-40-78-14-112-2-126 2-126 14-112 40-78 34-26 0 0Z"
+        fill="currentColor"
+      />
+      <path
+        d="M0-6C-16-30-20-74-6-104 1-118 5-118 10-104 22-74 18-30 0-6Z"
+        fill="#000"
+        opacity="0.10"
+      />
+    </g>
+
+    <!-- A closed bud, for the edges of the arrangement. -->
+    <g id="bud">
+      <path
+        d="M0 0C-16-16-20-52-6-78 0-90 2-90 8-78 22-52 18-16 0 0Z"
+        fill="currentColor"
+        opacity="0.85"
+      />
+      <path
+        d="M0 0C-6-22-6-56 2-80 3-84 5-84 6-80 12-52 8-16 0 0Z"
+        fill="#000"
+        opacity="0.12"
+      />
+    </g>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#bg)" />
+  <rect width="1600" height="1000" fill="url(#glow)" />
+
+  <!-- Stems -->
+  <g fill="none" stroke="url(#stem)" stroke-linecap="round" stroke-width="9">
+    <path d="M600 470C602 560 646 690 786 782" />
+    <path d="M700 420C702 524 730 676 794 782" />
+    <path d="M800 396C800 508 800 672 800 782" />
+    <path d="M900 420C898 524 870 676 806 782" />
+    <path d="M1000 470C998 560 954 690 814 782" />
+    <path d="M660 545C666 624 712 720 792 786" />
+    <path d="M770 520C770 618 786 714 798 786" />
+    <path d="M880 526C878 620 848 716 806 786" />
+    <path d="M975 560C970 640 916 726 812 788" />
+  </g>
+
+  <!-- Leaves -->
+  <g fill="url(#leaf)">
+    <path d="M742 700C704 664 686 586 700 512 748 556 768 632 754 700Z" opacity="0.9" />
+    <path d="M866 706C902 664 916 584 900 510 856 558 840 634 852 706Z" opacity="0.9" />
+    <path d="M700 742C654 724 606 686 586 640 640 646 686 682 706 730Z" opacity="0.75" />
+    <path d="M910 748C954 726 998 686 1016 640 964 648 920 684 902 734Z" opacity="0.75" />
+  </g>
+
+  <!-- Blooms -->
+  <g>
+    <use href="#bloom" transform="translate(600 470) rotate(-16) scale(1.2)" style="color: #e0556f" />
+    <use href="#bloom" transform="translate(700 420) rotate(-8) scale(1.3)" style="color: #f2788c" />
+    <use href="#bloom" transform="translate(800 396) rotate(-2) scale(1.36)" style="color: #ff9fb0" />
+    <use href="#bloom" transform="translate(900 420) rotate(8) scale(1.3)" style="color: #e8637c" />
+    <use href="#bloom" transform="translate(1000 470) rotate(16) scale(1.2)" style="color: #f7c7cf" />
+    <use href="#bloom" transform="translate(660 545) rotate(-14) scale(1.16)" style="color: #ffb27a" />
+    <use href="#bloom" transform="translate(770 522) rotate(-4) scale(1.24)" style="color: #d94b6d" />
+    <use href="#bloom" transform="translate(880 526) rotate(6) scale(1.22)" style="color: #ff8fa3" />
+    <use href="#bloom" transform="translate(975 560) rotate(14) scale(1.16)" style="color: #f2e2c4" />
+    <use href="#bud" transform="translate(548 540) rotate(-22) scale(1.25)" style="color: #e0556f" />
+    <use href="#bud" transform="translate(1056 534) rotate(22) scale(1.25)" style="color: #ffb27a" />
+  </g>
+
+  <!-- Wrap -->
+  <g>
+    <path
+      d="M588 712C660 748 720 772 800 778 880 772 940 748 1012 712 998 866 940 972 800 996 660 972 602 866 588 712Z"
+      fill="url(#paper)"
+    />
+    <g fill="none" stroke="#8f7454" stroke-opacity="0.22" stroke-width="2">
+      <path d="M648 744 724 990" />
+      <path d="M706 768 764 988" />
+      <path d="M800 778 800 996" />
+      <path d="M894 768 836 988" />
+      <path d="M952 744 876 990" />
+    </g>
+    <path
+      d="M588 712C660 748 720 772 800 778 880 772 940 748 1012 712 1007 736 1004 754 1000 772 930 742 870 730 800 732 730 730 670 742 600 772 596 754 593 736 588 712Z"
+      fill="#000"
+      opacity="0.10"
+    />
+  </g>
+
+  <!-- Ribbon -->
+  <g>
+    <path d="M622 862C712 894 888 894 978 862L972 908C888 940 712 940 628 908Z" fill="url(#ribbon)" />
+    <path d="M622 862C712 894 888 894 978 862L976 876C886 906 714 906 624 876Z" fill="#fff" opacity="0.16" />
+    <path d="M800 898C762 856 712 860 726 892 736 916 778 914 800 898Z" fill="#c94a67" />
+    <path d="M800 898C838 856 888 860 874 892 864 916 822 914 800 898Z" fill="#c94a67" />
+    <path d="M800 904C782 938 766 966 762 990L794 984C796 960 802 934 808 916Z" fill="#b23c57" />
+    <path d="M800 906C818 940 834 968 838 992L806 986C804 962 798 936 792 918Z" fill="#c94a67" />
+    <ellipse cx="800" cy="900" rx="17" ry="13" fill="#d6576f" />
+  </g>
+</svg>

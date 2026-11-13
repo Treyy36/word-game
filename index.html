@@ -66,103 +66,37 @@
     </div>
   </div>
 
-  <div id="reveal" class="reveal" role="dialog" aria-modal="true" aria-label="You won a dinner date" hidden>
+  <div id="reveal" class="reveal" role="dialog" aria-modal="true" aria-label="You won a bouquet of tulips" hidden>
     <div class="reveal-photo" aria-hidden="true"></div>
     <div class="reveal-shade" aria-hidden="true"></div>
     <div class="reveal-inner">
       <p class="reveal-kicker">you won</p>
-      <h2 class="reveal-title">a dinner date</h2>
+      <h2 class="reveal-title">a bouquet of tulips</h2>
       <div class="reveal-rule" aria-hidden="true"></div>
-      <p class="reveal-place">answer<span class="reveal-dot">.</span></p>
-      <p class="reveal-sub">friends <span class="reveal-dot">&middot;</span> happy hour <span class="reveal-dot">&middot;</span> see you there</p>
-      <button id="plan-open" class="reveal-cta" type="button">see the plan</button>
+      <p class="reveal-place">tulip<span class="reveal-dot">.</span></p>
+      <p class="reveal-sub">fresh cut <span class="reveal-dot">&middot;</span> wrapped in paper <span class="reveal-dot">&middot;</span> for you</p>
+      <button id="note-open" class="reveal-cta" type="button">read the card</button>
     </div>
   </div>
 
-  <section id="plan" class="plan" aria-label="Tonight's plan" hidden>
-    <button id="plan-close" class="plan-close" type="button">&larr; back</button>
+  <section id="note" class="note" aria-label="The card that came with the bouquet" hidden>
+    <button id="note-close" class="note-close" type="button">&larr; back</button>
 
-    <div class="plan-scroll">
-      <header class="plan-head">
-        <p class="plan-kicker">tonight</p>
-        <h2 class="plan-title">the plan</h2>
-      </header>
-
-      <ol class="timeline">
-        <li class="tl">
-          <span class="tl-time">4:40<span>pm</span> &ndash; 5:00<span>pm</span></span>
-          <div class="tl-body">
-            <h3>pickup</h3>
-          </div>
-        </li>
-        <li class="tl">
-          <span class="tl-time">5:00<span>pm</span> &ndash; 5:45<span>pm</span></span>
-          <div class="tl-body">
-            <h3>dinner at answer.</h3>
-            <p>we&rsquo;ll be there during happy hour (4:15&ndash;6:00), so both menus are fair game</p>
-          </div>
-        </li>
-        <li class="tl">
-          <span class="tl-time">after</span>
-          <div class="tl-body">
-            <h3>dessert at home</h3>
-            <p>decaf cappuccinos, cookies, ice cream</p>
-          </div>
-        </li>
-        <li class="tl">
-          <span class="tl-time">evening</span>
-          <div class="tl-body">
-            <h3>vision quest &amp; catan</h3>
-          </div>
-        </li>
-      </ol>
-
-      <section class="card">
-        <h3 class="card-title">the weather</h3>
-        <div id="weather-body" class="weather-body">
-          <p class="weather-loading">checking nashville&hellip;</p>
-        </div>
-      </section>
-
-      <section class="card">
-        <h3 class="card-title">my picks</h3>
-        <div class="picks">
-          <div class="pick-group">
-            <span class="pick-label">dinner menu <em>&mdash; in red</em></span>
-            <p class="pick-items">trout &middot; chicken &middot; burger</p>
-          </div>
-          <div class="pick-group">
-            <span class="pick-label">happy hour <em>&mdash; in green</em></span>
-            <p class="pick-items">potatoes &middot; dip &middot; peppers &middot; asparagus</p>
-          </div>
-        </div>
-        <p class="card-note">happy hour pricing is bar-top only</p>
-      </section>
-
-      <section class="card">
-        <h3 class="card-title">the menus</h3>
-        <div class="menu-grid">
-          <button class="menu-thumb" type="button" data-full="assets/happy-hour-1.png" data-label="happy hour">
-            <img src="assets/happy-hour-1.png" alt="Happy hour menu" loading="lazy" />
-            <span>happy hour</span>
-          </button>
-          <button class="menu-thumb" type="button" data-full="assets/menu-1.png" data-label="dinner">
-            <img src="assets/menu-1.png" alt="Dinner menu" loading="lazy" />
-            <span>dinner</span>
-          </button>
-          <button class="menu-thumb" type="button" data-full="assets/menu-2.png" data-label="drinks">
-            <img src="assets/menu-2.png" alt="Drinks menu" loading="lazy" />
-            <span>drinks</span>
-          </button>
-        </div>
-        <p class="card-note">tap a menu to read it</p>
-      </section>
-    </div>
+    <article class="note-card">
+      <p class="note-kicker">the card</p>
+      <h2 class="note-title">for you.</h2>
+      <div class="note-rule" aria-hidden="true"></div>
+      <p class="note-body">
+        Tulips stand for perfect love, so a whole bouquet of them felt like the
+        right prize for the right word.
+      </p>
+      <p class="note-body">
+        They were already on their way the moment you typed it. Consider this
+        your claim check &mdash; redeemable immediately.
+      </p>
+      <p class="note-sign">&mdash; trey</p>
+    </article>
   </section>
-
-  <div id="lightbox" class="lightbox" hidden>
-    <img id="lightbox-img" alt="" />
-  </div>
 
   <script type="module" src="game.js"></script>
 </body>

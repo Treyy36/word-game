@@ -35,6 +35,10 @@
 html,
 body {
   min-height: 100%;
+  /* The page scrolls as one column, so an accidental pull-to-refresh at the top
+     would otherwise reload the game mid-round. Chrome, Firefox and iOS 16+
+     honour this; older Safari is covered by the saved-progress restore. */
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -437,11 +441,11 @@ html.revealed .app {
   opacity: 1;
 }
 
-/* The venue photo, full-bleed, with a slow drift as it appears. */
+/* The bouquet, full-bleed, with a slow drift as it appears. */
 .reveal-photo {
   position: absolute;
   inset: 0;
-  background: #05080c url("assets/answer.png") center / cover no-repeat;
+  background: #07090d url("assets/tulips.svg") center / cover no-repeat;
   transform: scale(1.09);
   transition: transform 11s ease-out;
 }
@@ -450,13 +454,14 @@ html.revealed .app {
   transform: scale(1);
 }
 
-/* Scrim so the type stays legible over a bright interior shot. */
+/* Scrim so the type stays legible while the flowers keep their colour: dark
+   right behind the words, nearly clear over the petals. */
 .reveal-shade {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(58% 54% at 50% 46%, rgba(4, 7, 10, 0.18), rgba(4, 7, 10, 0.62) 82%),
-    linear-gradient(180deg, rgba(4, 7, 10, 0.60) 0%, rgba(4, 7, 10, 0.16) 45%, rgba(4, 7, 10, 0.78) 100%);
+    radial-gradient(48% 34% at 50% 48%, rgba(4, 7, 10, 0.66), rgba(4, 7, 10, 0.06) 80%),
+    linear-gradient(180deg, rgba(4, 7, 10, 0.42) 0%, rgba(4, 7, 10, 0.04) 44%, rgba(4, 7, 10, 0.55) 100%);
 }
 
 .reveal-inner {
@@ -570,18 +575,21 @@ html.revealed .app {
   transform: translateY(1px);
 }
 
-/* Itinerary ------------------------------------------------------------- */
+/* The card --------------------------------------------------------------- */
 
-.plan {
+.note {
   position: fixed;
   inset: 0;
   z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 74px 20px 40px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background-color: #05080c;
+  background-color: #07090d;
   background-image: radial-gradient(
     62vmax 48vmax at 50% -8%,
-    rgba(91, 141, 255, 0.14),
+    rgba(255, 141, 168, 0.16),
     transparent 62%
   );
   background-repeat: no-repeat;
@@ -590,15 +598,15 @@ html.revealed .app {
   transition: opacity 0.45s ease;
 }
 
-.plan[hidden] {
+.note[hidden] {
   display: none;
 }
 
-.plan.is-visible {
+.note.is-visible {
   opacity: 1;
 }
 
-.plan-close {
+.note-close {
   position: fixed;
   top: 14px;
   left: 14px;
@@ -615,262 +623,65 @@ html.revealed .app {
   transition: color 0.18s ease, border-color 0.18s ease;
 }
 
-.plan-close:hover {
+.note-close:hover {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-.plan-scroll {
-  width: min(640px, 100%);
-  margin: 0 auto;
-  padding: 76px 20px 72px;
+/* Cream stock, so the card reads as paper against the dark scene. */
+.note-card {
+  width: min(520px, 100%);
+  margin: auto;
+  padding: 46px 34px 40px;
+  text-align: center;
+  color: #2b2320;
+  background: linear-gradient(180deg, #f8efe6, #e9dccd);
+  border-radius: 18px;
+  box-shadow: 0 40px 90px -40px #000, inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  transform: translateY(10px);
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.plan-head {
-  margin-bottom: 26px;
+.note.is-visible .note-card {
+  transform: none;
 }
 
-.plan-kicker {
+.note-kicker {
   margin: 0;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: #7f8ea3;
+  color: #a08a78;
 }
 
-.plan-title {
-  margin: 4px 0 0;
-  font-size: clamp(1.9rem, 7vw, 2.6rem);
+.note-title {
+  margin: 0.22em 0 0;
+  font-size: clamp(1.9rem, 7vw, 2.5rem);
   font-weight: 750;
   letter-spacing: -0.035em;
-  color: #fff;
+  color: #241b18;
 }
 
-/* Timeline */
-
-.timeline {
-  margin: 0 0 18px;
-  padding: 0;
-  list-style: none;
+.note-rule {
+  width: 40px;
+  height: 1px;
+  margin: 1.5em auto;
+  background: rgba(120, 90, 70, 0.35);
 }
 
-.tl {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
-  gap: 16px;
-  padding: 16px 0;
-  border-top: 1px solid var(--line);
+.note-body {
+  margin: 0 0 0.9em;
+  font-size: 0.97rem;
+  line-height: 1.7;
+  color: #4c3d34;
 }
 
-.tl-time {
+.note-sign {
+  margin: 1.4em 0 0;
   font-size: 0.92rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: #a9c8ff;
-}
-
-.tl-time span {
-  margin-left: 2px;
-  font-size: 0.72em;
-  color: #6f7f93;
-}
-
-.tl-body h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 650;
-  color: #fff;
-}
-
-.tl-body p {
-  margin: 5px 0 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-/* Cards */
-
-.card {
-  margin-bottom: 14px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.035);
-}
-
-.card-title {
-  margin: 0 0 16px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: #7f8ea3;
-}
-
-.card-note {
-  margin: 16px 0 0;
-  font-size: 0.76rem;
-  color: #5f6c80;
-}
-
-/* Picks */
-
-.picks {
-  display: grid;
-  gap: 18px;
-}
-
-.pick-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 0.82rem;
-  color: #c2cede;
-}
-
-.pick-label em {
-  font-style: normal;
-  color: #6f7f93;
-}
-
-.pick-items {
-  margin: 0;
-  font-size: 0.95rem;
-  color: #e9eff8;
-}
-
-/* Weather */
-
-.weather-loading {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #5f6c80;
-}
-
-.weather-main {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-}
-
-.weather-temp {
-  font-size: 3rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-}
-
-.weather-side {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.weather-at {
-  font-size: 0.68rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #7f8ea3;
-}
-
-.weather-feels {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.weather-stats {
-  display: flex;
-  gap: 30px;
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.weather-stats li {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.weather-stats span {
-  font-size: 0.66rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #7f8ea3;
-}
-
-.weather-stats strong {
-  font-size: 0.95rem;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-}
-
-.weather-tip {
-  margin: 18px 0 0;
-  font-size: 0.85rem;
-  color: #a9c8ff;
-}
-
-/* Menus */
-
-.menu-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.menu-thumb {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 8px;
-  font: inherit;
-  font-size: 0.7rem;
-  color: var(--muted);
-  text-align: center;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  cursor: zoom-in;
-  transition: border-color 0.18s ease, background 0.18s ease;
-}
-
-.menu-thumb:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.menu-thumb img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: 6px;
-}
-
-/* Lightbox */
-
-.lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: grid;
-  place-items: center;
-  padding: 14px;
-  background: rgba(4, 6, 9, 0.95);
-  cursor: zoom-out;
-}
-
-.lightbox[hidden] {
-  display: none;
-}
-
-.lightbox img {
-  max-width: 100%;
-  max-height: 100%;
-  border-radius: 8px;
-  box-shadow: 0 30px 90px -30px #000;
+  font-style: italic;
+  color: #8a7365;
 }
 
 /* Small screens ---------------------------------------------------------- */

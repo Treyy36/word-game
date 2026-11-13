@@ -55,11 +55,14 @@ const BAR_MAX_RANK = 50000;
 const EASTER_EGGS = new Map([
   ['trey', 'cool guy'],
   ['harper', 'Princess'],
+  ['rat', 'Berkley'],
+  ['berkley', 'rat'],
+  ['baby', ';)'],
 ]);
 
 /** The secret word. Hard-coded as requested; `?word=foo` overrides it for testing. */
 const params = new URLSearchParams(location.search);
-const ANSWER = (params.get('word') || 'answer').trim().toLowerCase();
+const ANSWER = (params.get('word') || 'tulip').trim().toLowerCase();
 
 /* -------------------------------------------------------------------------- */
 /* DOM                                                                        */
@@ -78,12 +81,9 @@ const ui = {
   loaderBar: document.getElementById('loader-bar'),
   loaderText: document.getElementById('loader-text'),
   reveal: document.getElementById('reveal'),
-  plan: document.getElementById('plan'),
-  planOpen: document.getElementById('plan-open'),
-  planClose: document.getElementById('plan-close'),
-  weatherBody: document.getElementById('weather-body'),
-  lightbox: document.getElementById('lightbox'),
-  lightboxImg: document.getElementById('lightbox-img'),
+  note: document.getElementById('note'),
+  noteOpen: document.getElementById('note-open'),
+  noteClose: document.getElementById('note-close'),
 };
 
 /* -------------------------------------------------------------------------- */
@@ -591,6 +591,9 @@ function registerGuess(word, rank, message = null) {
   row.classList.add('latest');
   ui.list.prepend(row);
 
+  // After the row lands, so the saved board is the one on screen.
+  saveProgress();
+
   ui.input.value = '';
   ui.input.focus();
 
@@ -626,6 +629,7 @@ function registerEgg(word, message) {
 
   unpinPrevious();
   ui.list.prepend(createEggRow(word, message));
+  saveProgress();
 
   ui.input.value = '';
   ui.input.focus();
@@ -641,6 +645,97 @@ function flashRow(word) {
   void row.offsetWidth; // force reflow so the animation can restart
   row.classList.add('flash');
   row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Saved progress                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Every guess is mirrored into localStorage under the answer's own key, so a
+ * reload — including the pull-to-refresh you get from flicking back up to the
+ * input on a phone — resumes the round instead of resetting it. A new word
+ * starts clean because the key changes with it.
+ */
+const PROGRESS_KEY = `trey-texto:v1:${ANSWER}`;
+
+function saveProgress() {
+  // Saved in on-screen order, so a reload puts every row back exactly where the
+  // player left it — including the pinned newest row.
+  const entries = [...ui.list.children]
+    .map((row) => {
+      const { word } = row.dataset;
+      const saved = guesses.get(canonicalWord(word, dictionary));
+      if (!saved) return null;
+
+      return {
+        word,
+        rank: saved.rank ?? null,
+        egg: saved.egg ?? null,
+        latest: row.classList.contains('latest'),
+      };
+    })
+    .filter(Boolean);
+
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(entries));
+  } catch {
+    // Private browsing or a full quota: the game still plays, it just won't
+    // survive a reload.
+  }
+}
+
+function readProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? 'null');
+    return Array.isArray(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rebuilds the board from saved progress, in the order it was saved in. Returns
+ * true when the saved round had already been won.
+ */
+function restoreProgress() {
+  const saved = readProgress();
+  if (!saved) return false;
+
+  let won = false;
+
+  for (const entry of saved) {
+    if (!entry || typeof entry.word !== 'string') continue;
+
+    const { word } = entry;
+    const key = canonicalWord(word, dictionary);
+    let row;
+
+    if (typeof entry.rank === 'number') {
+      guesses.set(key, { rank: entry.rank, word });
+      if (entry.rank < bestRank) bestRank = entry.rank;
+      if (entry.rank === 1) won = true;
+      row = createRow(word, entry.rank);
+    } else if (typeof entry.egg === 'string') {
+      guesses.set(key, { egg: entry.egg, word });
+      row = createEggRow(word, entry.egg);
+    } else {
+      continue;
+    }
+
+    if (entry.latest) row.classList.add('latest');
+    ui.list.append(row);
+    guessTotal += 1;
+  }
+
+  ui.guessCount.textContent = String(guessTotal);
+
+  if (bestRank !== Number.POSITIVE_INFINITY) {
+    ui.closestRank.textContent = String(bestRank);
+    ui.closestRank.classList.add('revealed');
+  }
+
+  return won;
 }
 
 function revealAnswer() {
@@ -662,8 +757,8 @@ function finish() {
 }
 
 /**
- * Fades the board out and the dinner invitation in. Safe to call repeatedly —
- * the reveal only ever plays once per page load.
+ * Fades the board out and the bouquet in. Safe to call repeatedly — the reveal
+ * only ever plays once per page load.
  */
 function showReveal() {
   if (revealed) return;
@@ -680,109 +775,22 @@ function showReveal() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Itinerary                                                                  */
+/* The card that came with the bouquet                                        */
 /* -------------------------------------------------------------------------- */
 
-const WEATHER = {
-  latitude: 36.1627,
-  longitude: -86.7816,
-  timezone: 'America/Chicago',
-};
-
-let weatherRequested = false;
-
-function formatClock(iso) {
-  const [hourText, minuteText] = (iso.split('T')[1] ?? '').split(':');
-  const hour = Number(hourText);
-  const suffix = hour >= 12 ? 'pm' : 'am';
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${hour12}:${minuteText} ${suffix}`;
-}
-
-function weatherTip(rain) {
-  if (rain >= 40) return 'rain is likely — bring an umbrella.';
-  return 'cool evening — perfect for a cardigan ;)';
-}
-
-function renderWeather(data) {
-  const hourly = data?.hourly;
-  if (!hourly?.time?.length) throw new Error('weather response missing hourly data');
-
-  // hourly.time[0] is midnight local, so index 17 is the 5:00 pm slot.
-  const slot = Math.min(17, hourly.time.length - 1);
-  const temp = Math.round(hourly.temperature_2m[slot]);
-  const feels = Math.round(hourly.apparent_temperature[slot]);
-  const rain = Math.round(hourly.precipitation_probability?.[slot] ?? 0);
-  const sunset = data.daily?.sunset?.[0];
-
-  ui.weatherBody.innerHTML = `
-    <div class="weather-main">
-      <span class="weather-temp">${temp}&deg;</span>
-      <div class="weather-side">
-        <span class="weather-at">at 5:00 pm</span>
-        <span class="weather-feels">feels like ${feels}&deg;</span>
-      </div>
-    </div>
-    <ul class="weather-stats">
-      <li><span>rain</span><strong>${rain}%</strong></li>
-      ${sunset ? `<li><span>sunset</span><strong>${formatClock(sunset)}</strong></li>` : ''}
-    </ul>
-    <p class="weather-tip">${weatherTip(rain)}</p>
-  `;
-}
-
-async function loadWeather() {
-  if (weatherRequested) return;
-  weatherRequested = true;
-
-  const params = new URLSearchParams({
-    latitude: String(WEATHER.latitude),
-    longitude: String(WEATHER.longitude),
-    hourly: 'temperature_2m,apparent_temperature,precipitation_probability',
-    daily: 'sunset',
-    temperature_unit: 'fahrenheit',
-    timezone: WEATHER.timezone,
-    forecast_days: '1',
-  });
-
-  try {
-    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
-    if (!response.ok) throw new Error(`weather request failed: ${response.status}`);
-    renderWeather(await response.json());
-  } catch (error) {
-    console.error(error);
-    const note = document.createElement('p');
-    note.className = 'weather-loading';
-    note.textContent = 'could not load the forecast — check your connection.';
-    ui.weatherBody.replaceChildren(note);
-  }
-}
-
-function openPlan() {
-  ui.plan.hidden = false;
-  ui.plan.scrollTop = 0;
+function openNote() {
+  ui.note.hidden = false;
+  ui.note.scrollTop = 0;
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => ui.plan.classList.add('is-visible'));
+    requestAnimationFrame(() => ui.note.classList.add('is-visible'));
   });
-  loadWeather();
 }
 
-function closePlan() {
-  ui.plan.classList.remove('is-visible');
+function closeNote() {
+  ui.note.classList.remove('is-visible');
   setTimeout(() => {
-    ui.plan.hidden = true;
+    ui.note.hidden = true;
   }, 420);
-}
-
-function openLightbox(src, label) {
-  ui.lightboxImg.src = src;
-  ui.lightboxImg.alt = label ? `${label} menu` : 'menu';
-  ui.lightbox.hidden = false;
-}
-
-function closeLightbox() {
-  ui.lightbox.hidden = true;
-  ui.lightboxImg.removeAttribute('src');
 }
 
 async function handleGuess(event) {
@@ -867,19 +875,11 @@ async function start() {
 
   ui.form.addEventListener('submit', handleGuess);
 
-  ui.planOpen.addEventListener('click', openPlan);
-  ui.planClose.addEventListener('click', closePlan);
-  ui.lightbox.addEventListener('click', closeLightbox);
-
-  ui.plan.addEventListener('click', (event) => {
-    const thumb = event.target.closest('.menu-thumb');
-    if (thumb) openLightbox(thumb.dataset.full, thumb.dataset.label);
-  });
+  ui.noteOpen.addEventListener('click', openNote);
+  ui.noteClose.addEventListener('click', closeNote);
 
   document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    if (!ui.lightbox.hidden) closeLightbox();
-    else if (!ui.plan.hidden) closePlan();
+    if (event.key === 'Escape' && !ui.note.hidden) closeNote();
   });
 
   // Starts downloading immediately; awaited before the input unlocks.
@@ -893,11 +893,26 @@ async function start() {
     await Promise.all([wordListsLoad, rankTableLoad]);
 
     ui.loader.hidden = true;
+
+    // A reload mid-round resumes the board; a reload after the win puts the
+    // bouquet back rather than leaving a locked, empty game.
+    if (restoreProgress()) {
+      revealAnswer();
+      lockInput();
+      setStatus('Solved! 🎉', 'success');
+      setTimeout(showReveal, 600);
+      return;
+    }
+
     ui.input.disabled = false;
     ui.button.disabled = false;
     ui.input.focus();
 
-    setStatus(`${ANSWER.length} letters. Start guessing.`);
+    setStatus(
+      guessTotal > 0
+        ? `Back where you left off — ${guessTotal} guesses so far.`
+        : `${ANSWER.length} letters. Start guessing.`,
+    );
   } catch (error) {
     console.error(error);
     ui.loader.hidden = true;
